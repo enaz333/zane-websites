@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Choose temporary workers.dev staging or production
+        description: Choose temporary staging, personal launch, or production
         required: true
         type: choice
         default: staging
-        options: [staging, production]
+        options: [staging, personal-launch, production]
       project:
         description: Enabled project slug, or all
         required: true
@@ -25,8 +25,8 @@ concurrency:
 
 jobs:
   publish:
-    # Change false to true in a reviewed PR after Cloudflare staging verification.
-    if: ${{ false && (github.event_name == 'push' || inputs.target == 'production') && github.ref == 'refs/heads/main' && github.ref_protected && vars.WORKERS_PUBLISH_ENABLED == 'true' }}
+    # Keep general production publishing disabled until it is approved separately.
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected && ((github.event_name == 'workflow_dispatch' && inputs.target == 'personal-launch' && inputs.project == 'personal') || (false && (github.event_name == 'push' || inputs.target == 'production') && vars.WORKERS_PUBLISH_ENABLED == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: cloudflare-production
@@ -52,9 +52,13 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
           PROJECT: ${{ inputs.project }}
+          TARGET: ${{ inputs.target }}
         shell: bash
         run: |
-          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+          if [[ "$TARGET" == personal-launch ]]; then
+            python3 scripts/deploy_workers.py --project photo-notes
+            python3 scripts/deploy_workers.py --project personal
+          elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
             python3 scripts/deploy_workers.py --project "$PROJECT"
           else
             python3 scripts/deploy_workers.py --before "$BEFORE_SHA" --after "$AFTER_SHA"
@@ -68,13 +72,17 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
           PROJECT: ${{ inputs.project }}
+          TARGET: ${{ inputs.target }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ secrets.CLOUDFLARE_DOMAIN_API_TOKEN }}
+          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ inputs.target != 'personal-launch' && secrets.CLOUDFLARE_DOMAIN_API_TOKEN || '' }}
         shell: bash
         run: |
-          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+          if [[ "$TARGET" == personal-launch ]]; then
+            npx --no-install wrangler deploy --config sites/photo-notes/wrangler.json
+            npx --no-install wrangler deploy --config sites/personal/wrangler.json
+          elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
             python3 scripts/deploy_workers.py --apply --project "$PROJECT"
           else
             python3 scripts/deploy_workers.py --apply --before "$BEFORE_SHA" --after "$AFTER_SHA"

@@ -2,13 +2,14 @@ import { applyCopy, copyDigest, path, sha } from './studio-copy.mjs';
 import { budget, propose, reservation } from './studio-provider.mjs';
 import { appToken, publish, sourceAt } from './studio-publisher.mjs';
 
+const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const contextFiles = ['AGENTS.md', 'design/BRAND.md', 'sites/personal/AGENTS.md'];
 const scope = "t.kind = 'edit' AND t.project = 'personal' AND (t.page IS NULL OR t.page IN ('/', 'https://zanegiordano.com', 'https://zanegiordano.com/'))";
 const plus = (date, minutes) => new Date(date.getTime() + minutes * 60_000).toISOString();
 const iso = date => date.toISOString();
 
 export function configured(env) {
-  return env.STUDIO_EXECUTION_ENABLED === 'true' && env.DB && budget(env) &&
+  return uuid(env.STUDIO_STAGING_ID) && uuid(env.STUDIO_TEST_TASK_ID) && env.STUDIO_EXECUTION_ENABLED === 'true' && env.DB && budget(env) &&
     sha(env.STUDIO_BASE_SHA) && /^https:\/\/[a-z0-9-]+\.run\.app$/.test(env.STUDIO_CHECK_ORIGIN ?? '') &&
     env.STUDIO_CHECK_SECRET?.length >= 32 && env.STUDIO_OPENAI_KEY &&
     /^\d+$/.test(env.STUDIO_GITHUB_APP_ID ?? '') && /^\d+$/.test(env.STUDIO_GITHUB_INSTALLATION_ID ?? '') &&
@@ -16,7 +17,7 @@ export function configured(env) {
 }
 
 export async function acquire(db, env, now) {
-  if (!budget(env) || !sha(env.STUDIO_BASE_SHA)) return null;
+  if (!budget(env) || !sha(env.STUDIO_BASE_SHA) || !uuid(env.STUDIO_STAGING_ID) || !uuid(env.STUDIO_TEST_TASK_ID)) return null;
   const at = iso(now);
   const month = at.slice(0, 7);
   const lock = crypto.randomUUID();
@@ -24,12 +25,16 @@ export async function acquire(db, env, now) {
     db.prepare(`INSERT INTO execution_dispatch (task_id, base_sha, month, reserved_micros, phase, deadline)
       SELECT e.task_id, ?, ?, ?, 'prepare', ? FROM task_executions e JOIN tasks t ON t.id = e.task_id
       WHERE e.state = 'queued' AND t.status = 'submitted' AND e.available_at <= ? AND ${scope}
+        AND e.task_id = ? AND EXISTS (SELECT 1 FROM studio_dispatch_environment WHERE id = 1 AND staging_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM execution_dispatch WHERE task_id = e.task_id)
         AND NOT EXISTS (SELECT 1 FROM execution_dispatch WHERE phase <> 'done')
         AND ? + COALESCE((SELECT SUM(reserved_micros) FROM execution_dispatch WHERE month = ?), 0) <= ?
       ORDER BY e.priority DESC, e.available_at, e.task_id LIMIT 1`)
-      .bind(env.STUDIO_BASE_SHA, month, reservation, plus(now, 90), at, reservation, month, budget(env)),
+      .bind(env.STUDIO_BASE_SHA, month, reservation, plus(now, 90), at, env.STUDIO_TEST_TASK_ID, env.STUDIO_STAGING_ID, reservation, month, budget(env)),
     db.prepare(`UPDATE execution_dispatch SET lock_id = ?, lock_until = ?, attempts = attempts + 1
-      WHERE phase <> 'done' AND (lock_until IS NULL OR lock_until <= ?)`).bind(lock, plus(now, 10), at),
+      WHERE phase <> 'done' AND task_id = ?
+        AND EXISTS (SELECT 1 FROM studio_dispatch_environment WHERE id = 1 AND staging_id = ?)
+        AND (lock_until IS NULL OR lock_until <= ?)`).bind(lock, plus(now, 16), env.STUDIO_TEST_TASK_ID, env.STUDIO_STAGING_ID, at),
     db.prepare(`UPDATE task_executions SET state = 'running', started_at = ?, updated_at = ?, claim_id = ?, lease_until = ?
       WHERE state = 'queued' AND task_id = (SELECT task_id FROM execution_dispatch WHERE lock_id = ?)`)
       .bind(at, at, lock, plus(now, 90), lock),

@@ -34,7 +34,7 @@ function run(command, args, cwd, timeout) {
   });
 }
 
-createServer(async (request, response) => {
+createServer({ headersTimeout: 10_000, requestTimeout: 10_000, connectionsCheckingInterval: 1000, maxHeaderSize: 8192 }, async (request, response) => {
   const reply = (status, data) => {
     response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     response.end(JSON.stringify(data));
@@ -71,7 +71,9 @@ createServer(async (request, response) => {
         return reply(200, { base, passed: false });
       }
     }
-    return reply(200, { base, passed: true, digest: await copyDigest(updated) });
+    const checked = await readFile(join(folder, path), 'utf8');
+    if (checked !== updated) return reply(200, { base, passed: false });
+    return reply(200, { base, passed: true, digest: await copyDigest(checked) });
   } catch {
     return reply(500, {});
   } finally {

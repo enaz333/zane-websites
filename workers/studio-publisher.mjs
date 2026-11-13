@@ -46,12 +46,12 @@ export async function publish(run, source, token, fetcher = fetch, { recoverOnly
   const branch = 'studio/copy-' + run.task_id;
   const get = (route, options) => call(fetcher, project + route, { token, ...options });
   const post = (route, data) => get(route, { data });
-  const pulls = () => get('/pulls?state=all&base=main&head=' + encodeURIComponent('enaz333:' + branch));
+  const pulls = () => get('/pulls?state=all&head=' + encodeURIComponent('enaz333:' + branch));
   const prs = await pulls();
   if (prs.length) {
     const [pr] = prs;
     const revision = pr.head?.sha;
-    if (prs.length !== 1 || !pr.draft || pr.state !== 'open' || !sha(revision) ||
+    if (prs.length !== 1 || !pr.draft || pr.state !== 'open' || pr.base?.ref !== 'main' || !sha(revision) ||
         !Number.isSafeInteger(pr.number) || pr.number < 1) throw new Error('Unexpected pull request');
     const ref = await get('/git/ref/heads/' + branch);
     const diff = await get('/commits/' + revision);
@@ -61,6 +61,9 @@ export async function publish(run, source, token, fetcher = fetch, { recoverOnly
     return pr.number;
   }
   if (recoverOnly) return null;
+  // Avoid testing against one tree and proposing against a different main.
+  const mainMatches = async () => (await get('/git/ref/heads/main')).object?.sha === run.base_sha;
+  if (!await mainMatches()) return null;
   const parent = await get('/git/commits/' + run.base_sha);
   const tree = await post('/git/trees', { base_tree: parent.tree.sha,
     tree: [{ path, mode: '100644', type: 'blob', content }] });
@@ -72,10 +75,11 @@ export async function publish(run, source, token, fetcher = fetch, { recoverOnly
   if (!ref) await post('/git/refs', { ref: 'refs/heads/' + branch, sha: commit.sha });
   else if (ref.object.sha !== commit.sha) throw new Error('Unexpected branch head');
 
+  if (!await mainMatches()) return null;
   const pr = await post('/pulls', { base: 'main', head: branch, draft: true,
     title: 'Edit the Personal site projects heading',
     body: 'Studio proposed a one-heading copy edit. The isolated runner passed the repository checks. Review the diff before merging.' });
-  if (!pr.draft || pr.state !== 'open' || pr.head?.sha !== commit.sha ||
+  if (!pr.draft || pr.state !== 'open' || pr.base?.ref !== 'main' || pr.head?.sha !== commit.sha ||
       !Number.isSafeInteger(pr.number) || pr.number < 1) throw new Error('Unexpected pull request');
   return pr.number;
 }

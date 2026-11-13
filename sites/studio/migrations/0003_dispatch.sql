@@ -15,3 +15,9 @@ CREATE TABLE execution_dispatch (
 );
 CREATE INDEX dispatch_budget ON execution_dispatch (month);
 CREATE UNIQUE INDEX dispatch_one_active ON execution_dispatch ((1)) WHERE phase <> 'done';
+
+-- Provision this marker explicitly in the staging database after verifying its UUID.
+CREATE TABLE studio_dispatch_environment (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  staging_id TEXT NOT NULL
+);

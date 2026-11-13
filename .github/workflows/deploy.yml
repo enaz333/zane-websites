@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Choose staging, personal launch, festival launch, project routes, or production
+        description: Choose staging, personal launch, festival launch, Club launch, project routes, or production
         required: true
         type: choice
         default: staging
-        options: [staging, personal-launch, festival-launch, project-routes, production]
+        options: [staging, personal-launch, festival-launch, club-launch, project-routes, production]
       project:
         description: Enabled project slug, all, or festivals for festival-launch
         required: true
@@ -26,7 +26,7 @@ concurrency:
 jobs:
   publish:
     # Keep general production publishing disabled until it is approved separately.
-    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected && ((github.event_name == 'workflow_dispatch' && inputs.target == 'personal-launch' && inputs.project == 'personal') || (github.event_name == 'workflow_dispatch' && inputs.target == 'festival-launch' && inputs.project == 'festivals') || (github.event_name == 'workflow_dispatch' && inputs.target == 'project-routes' && inputs.project == 'personal') || (false && (github.event_name == 'push' || inputs.target == 'production') && vars.WORKERS_PUBLISH_ENABLED == 'true')) }}
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected && ((github.event_name == 'workflow_dispatch' && inputs.target == 'personal-launch' && inputs.project == 'personal') || (github.event_name == 'workflow_dispatch' && inputs.target == 'festival-launch' && inputs.project == 'festivals') || (github.event_name == 'workflow_dispatch' && inputs.target == 'project-routes' && inputs.project == 'personal') || (github.event_name == 'workflow_dispatch' && inputs.target == 'club-launch' && inputs.project == 'club') || (false && (github.event_name == 'push' || inputs.target == 'production') && vars.WORKERS_PUBLISH_ENABLED == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: cloudflare-production
@@ -79,7 +79,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ inputs.target != 'personal-launch' && inputs.target != 'festival-launch' && inputs.target != 'project-routes' && secrets.CLOUDFLARE_DOMAIN_API_TOKEN || '' }}
+          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ inputs.target != 'personal-launch' && inputs.target != 'festival-launch' && inputs.target != 'project-routes' && inputs.target != 'club-launch' && secrets.CLOUDFLARE_DOMAIN_API_TOKEN || '' }}
         shell: bash
         run: |
           if [[ "$TARGET" == personal-launch ]]; then
@@ -88,6 +88,9 @@ jobs:
           elif [[ "$TARGET" == festival-launch ]]; then
             npx --no-install wrangler deploy --config sites/acl/wrangler.json
             npx --no-install wrangler deploy --config sites/coachella/wrangler.json
+          elif [[ "$TARGET" == club-launch ]]; then
+            python3 scripts/check_club_launch.py --destinations
+            npx --no-install wrangler deploy --config sites/club/wrangler.json
           elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
             python3 scripts/deploy_workers.py --apply --project "$PROJECT"
           else

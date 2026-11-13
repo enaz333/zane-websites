@@ -100,3 +100,21 @@ test('Personal redirects exact registered short URLs and preserves the query', a
   });
   assert.equal(staged.headers.get('Location'), 'https://staged-acl.example/acl/');
 });
+
+test('Club preserves mixed-case Photo Notes, deep links, gallery and www canonicalization', async () => {
+  const env = { ...config('club').vars, ASSETS: mockAssets(['/buildfest/gallery.html']) };
+  for (const prefix of ['PhotoNotes', 'photonotes', 'photo-notes', 'PHOTO-NOTES']) {
+    for (const [suffix, expected] of [['', ''], ['/', ''], ['/INDEX.HTML', ''], ['/Album/Entry', '/Album/Entry']]) {
+      const response = await club.fetch(request(`/${prefix}${suffix}?card=a%2Bb`), env);
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get('Location'), `${env.PERSONAL_ORIGIN}/PhotoNotes${expected}?card=a%2Bb`);
+    }
+  }
+  const gallery = await club.fetch(request('/buildfest/gallery'), env);
+  assert.equal(gallery.status, 200);
+  assert.equal(await gallery.text(), '/buildfest/gallery.html');
+  const www = await club.fetch(new Request('https://www.coolstrangersclub.com/PHOTO-NOTES/?card=1'), env);
+  assert.equal(www.status, 301);
+  assert.equal(www.headers.get('Location'), 'https://coolstrangersclub.com/PHOTO-NOTES/?card=1');
+  assert.equal((await club.fetch(request('/photo-notes-unrelated'), env)).status, 404);
+});

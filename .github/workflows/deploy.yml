@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Choose temporary staging, personal launch, or production
+        description: Choose staging, personal launch, festival launch, or production
         required: true
         type: choice
         default: staging
-        options: [staging, personal-launch, production]
+        options: [staging, personal-launch, festival-launch, production]
       project:
-        description: Enabled project slug, or all
+        description: Enabled project slug, all, or festivals for festival-launch
         required: true
         type: string
 
@@ -26,7 +26,7 @@ concurrency:
 jobs:
   publish:
     # Keep general production publishing disabled until it is approved separately.
-    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected && ((github.event_name == 'workflow_dispatch' && inputs.target == 'personal-launch' && inputs.project == 'personal') || (false && (github.event_name == 'push' || inputs.target == 'production') && vars.WORKERS_PUBLISH_ENABLED == 'true')) }}
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected && ((github.event_name == 'workflow_dispatch' && inputs.target == 'personal-launch' && inputs.project == 'personal') || (github.event_name == 'workflow_dispatch' && inputs.target == 'festival-launch' && inputs.project == 'festivals') || (false && (github.event_name == 'push' || inputs.target == 'production') && vars.WORKERS_PUBLISH_ENABLED == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: cloudflare-production
@@ -58,6 +58,9 @@ jobs:
           if [[ "$TARGET" == personal-launch ]]; then
             python3 scripts/deploy_workers.py --project photo-notes
             python3 scripts/deploy_workers.py --project personal
+          elif [[ "$TARGET" == festival-launch ]]; then
+            python3 scripts/deploy_workers.py --project acl
+            python3 scripts/deploy_workers.py --project coachella
           elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
             python3 scripts/deploy_workers.py --project "$PROJECT"
           else
@@ -76,12 +79,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ inputs.target != 'personal-launch' && secrets.CLOUDFLARE_DOMAIN_API_TOKEN || '' }}
+          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ inputs.target != 'personal-launch' && inputs.target != 'festival-launch' && secrets.CLOUDFLARE_DOMAIN_API_TOKEN || '' }}
         shell: bash
         run: |
           if [[ "$TARGET" == personal-launch ]]; then
             npx --no-install wrangler deploy --config sites/photo-notes/wrangler.json
             npx --no-install wrangler deploy --config sites/personal/wrangler.json
+          elif [[ "$TARGET" == festival-launch ]]; then
+            npx --no-install wrangler deploy --config sites/acl/wrangler.json
+            npx --no-install wrangler deploy --config sites/coachella/wrangler.json
           elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
             python3 scripts/deploy_workers.py --apply --project "$PROJECT"
           else

@@ -214,4 +214,3 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
   const { results } = await db.prepare('SELECT reserved_micros, input_tokens, output_tokens FROM execution_dispatch').all();
   assert.deepEqual(results, [{ reserved_micros: reservation, input_tokens: 500, output_tokens: 20 }]);
 });
-

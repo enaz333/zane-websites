@@ -282,6 +282,39 @@ test('an eligible ASAP request is claimed before an older economy request', asyn
   assert.equal((await claimExecution(db, now)).id, economy.id);
 });
 
+test('dispatcher rejects unapproved origins and reports only fixed configuration codes', async () => {
+  const { configured, tick } = await import('../workers/studio-dispatch.mjs');
+  const origin = 'https://studio-validator-staging-7a3kki4cka-uc.a.run.app';
+  const env = {
+    DB: { withSession: () => assert.fail('Invalid config reached D1') },
+    STUDIO_EXECUTION_ENABLED: 'true', STUDIO_STAGING_ID: crypto.randomUUID(),
+    STUDIO_TEST_TASK_ID: crypto.randomUUID(), STUDIO_BASE_SHA: 'a'.repeat(40),
+    STUDIO_CHECK_ORIGIN: origin, STUDIO_CHECK_SECRET: 'x'.repeat(32),
+    STUDIO_OPENAI_KEY: 'fixture-key', STUDIO_GITHUB_PRIVATE_KEY: 'PRIVATE KEY-----',
+    STUDIO_GITHUB_APP_ID: '1', STUDIO_GITHUB_INSTALLATION_ID: '2',
+    STUDIO_RATE_CARD: 'gpt-6-luna:standard:0.10:0.01:0.125:0.50:0.20:0.02:0.25:0.75',
+    STUDIO_RUN_MICROS: '262548', STUDIO_MONTH_MICROS: '262548',
+  };
+  assert.equal(configured(env), true);
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+  try {
+    for (const value of [undefined, 'https://example.run.app', origin.replace('https:', 'http:'),
+      origin + '/', origin + ':443', origin + '/check?token=fixture-key', origin + '@example.com',
+      origin + '.example.com', origin + '\n']) {
+      await tick({ ...env, STUDIO_CHECK_ORIGIN: value }, { fetcher: () => assert.fail('Unexpected request') });
+      assert.deepEqual(warnings.pop(), ['studio_dispatch_config', 'invalid_validator_origin']);
+    }
+    await tick({ ...env, STUDIO_CHECK_SECRET: 'short-fixture' }, { fetcher: () => assert.fail('Unexpected request') });
+    assert.deepEqual(warnings.pop(), ['studio_dispatch_config', 'invalid_checker_secret']);
+    await tick({ ...env, STUDIO_EXECUTION_ENABLED: 'false' }, { fetcher: () => assert.fail('Unexpected request') });
+    assert.deepEqual(warnings, []);
+  } finally {
+    console.warn = warn;
+  }
+});
+
 test('dispatch reserves once, skips cancelled work and recovers a draft after a lost reply', async () => {
   const { generateKeyPairSync } = await import('node:crypto');
   const { tick } = await import('../workers/studio-dispatch.mjs');
@@ -294,7 +327,7 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
     STUDIO_STAGING_ID: crypto.randomUUID(),
     STUDIO_RATE_CARD: model + ':standard:0.10:0.01:0.125:0.50:0.20:0.02:0.25:0.75',
     STUDIO_RUN_MICROS: String(reservation), STUDIO_MONTH_MICROS: String(reservation),
-    STUDIO_CHECK_ORIGIN: 'https://example.run.app', STUDIO_CHECK_SECRET: 'a'.repeat(32),
+    STUDIO_CHECK_ORIGIN: 'https://studio-validator-staging-7a3kki4cka-uc.a.run.app', STUDIO_CHECK_SECRET: 'a'.repeat(32),
     STUDIO_OPENAI_KEY: 'fixture', STUDIO_GITHUB_APP_ID: '1', STUDIO_GITHUB_INSTALLATION_ID: '2',
     STUDIO_GITHUB_PRIVATE_KEY: privateKey.export({ format: 'pem', type: 'pkcs8' }) };
   const queued = createStudio(verify, { queueEdits: true });
@@ -328,7 +361,7 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
         usage: { input_tokens: 500, output_tokens: 20 },
         output: [{ type: 'message', content: [{ type: 'output_text', text: '{"replacement":"Selected projects"}' }] }] });
     }
-    if (hostname === 'example.run.app') {
+    if (hostname === 'studio-validator-staging-7a3kki4cka-uc.a.run.app') {
       if (body.replacement === 'Studio validator smoke test') {
         assert.equal(body.base, base);
         return Response.json({ base, passed: smokePasses, digest: await copyDigest(applyCopy(source, body.replacement)) });

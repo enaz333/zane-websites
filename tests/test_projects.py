@@ -10,7 +10,7 @@ from unittest.mock import Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from deploy_workers import attach_domain, check_domain, required_dependencies, select
-from projects import ROOT, affected, load, ordered, parse, scaffold
+from projects import ROOT, affected, load, ordered, parse, public_redirects, scaffold
 
 
 class RegistryTests(unittest.TestCase):
@@ -35,8 +35,15 @@ class RegistryTests(unittest.TestCase):
         return self.git("rev-parse", "HEAD")
 
     def test_template_adds_a_disabled_project(self):
+        before = load(self.root)
+        existing_files = {path: path.read_bytes() for directory in ("sites", "workers")
+                          for path in (self.root / directory).rglob("*") if path.is_file()}
         scaffold("new-site", self.root)
-        entry = load(self.root)["new-site"]
+        after = load(self.root)
+        entry = after["new-site"]
+        self.assertEqual({slug: after[slug] for slug in before}, before)
+        self.assertEqual(public_redirects(after), public_redirects(before))
+        self.assertEqual({path: path.read_bytes() for path in existing_files}, existing_files)
         self.assertFalse(entry["enabled"])
         self.assertEqual(entry["subdomain"], "new-site")
         self.assertEqual(entry["short_path"], "/new-site")

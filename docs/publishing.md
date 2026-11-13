@@ -43,3 +43,10 @@ After merging the staging workflow, run **Actions → Publish Workers → Run wo
 | `coolstrangersclub.com` and www | Retain the current Netlify connection; consider Club cutover after staging, destination verification and a printed QR scan |
 
 Before proposing specific record replacements, export the current Cloudflare DNS records and inspect Redirect Rules for the three parked destinations. Public Cloudflare edge IPs do not identify the origin records. If restoring a Netlify site, use the exact values from its Netlify Domain management page or a verified pre-cutover DNS export. Capture the exact printed QR URL including case, slash and query before approving the final Club redirect.
+
+## Public short URLs
+
+Every new public project must have a short URL under zanegiordano.com/<project-slug>. Agents register, test, and maintain it through the central registry as part of onboarding. The scaffold sets the short path and canonical HTTPS URL with the entry disabled. Use the final 200 URL as the canonical destination. When an entry is enabled, the personal Worker uses the registry for its homepage directory and exact GET/HEAD 302 redirects, with or without a trailing slash. Queries pass through and unrelated subpaths retain their normal handling. The homepage and Photo Notes keep their reserved internal routes.
+
+The personal Worker runs before Static Assets for route requests so new registry paths can be handled without a Wrangler config edit. The assets directory and existing CSS and JavaScript stay asset-first.
+Registry changes that affect public links select the personal Worker alongside affected projects in normal publishing. Deployment checks each canonical endpoint before uploading the personal Worker, then verifies both short URL forms and their destination. Staging substitutes the temporary project origins and verifies the same chain. For the initial ACL and Coachella links, run **Publish Workers** on protected **main** with target **project-routes** and project **personal**, then approve the run. This option deploys the personal Worker without domain changes. General publishing retains its separate approval gate.

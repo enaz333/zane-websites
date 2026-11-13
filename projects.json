@@ -6,7 +6,9 @@
     "watch": [
       "workers/prefixed-site.mjs",
       "workers/routing.mjs"
-    ]
+    ],
+    "short_path": "/acl",
+    "canonical_url": "https://acl.zanegiordano.com/acl/"
   },
   "club": {
     "depends_on": [
@@ -19,7 +21,9 @@
     "watch": [
       "workers/club.mjs",
       "workers/routing.mjs"
-    ]
+    ],
+    "short_path": "/club",
+    "canonical_url": "https://coolstrangersclub.com/"
   },
   "coachella": {
     "depends_on": [],
@@ -28,7 +32,9 @@
     "watch": [
       "workers/prefixed-site.mjs",
       "workers/routing.mjs"
-    ]
+    ],
+    "short_path": "/coachella",
+    "canonical_url": "https://coachella.zanegiordano.com/coachella/"
   },
   "personal": {
     "depends_on": [
@@ -38,8 +44,11 @@
     "subdomain": null,
     "watch": [
       "workers/personal.mjs",
+      "workers/project-directory.mjs",
       "workers/routing.mjs"
-    ]
+    ],
+    "short_path": "/",
+    "canonical_url": "https://zanegiordano.com/"
   },
   "photo-notes": {
     "depends_on": [],
@@ -48,6 +57,8 @@
     "watch": [
       "workers/prefixed-site.mjs",
       "workers/routing.mjs"
-    ]
+    ],
+    "short_path": "/PhotoNotes",
+    "canonical_url": "https://zanegiordano.com/PhotoNotes"
   }
 }

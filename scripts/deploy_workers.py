@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from projects import ROOT, affected, config_path, load, ordered
+from stage_workers import check_project_routes
 
 ZONE = "zanegiordano.com"
 SHA = re.compile(r"[a-f0-9]{40}")
@@ -114,13 +115,18 @@ def publish(projects, selected):
     # Keep the domain token away from Wrangler and its build subprocesses.
     env = dict(os.environ)
     env.pop("CLOUDFLARE_DOMAIN_API_TOKEN", None)
-    for slug in ordered(projects):
-        if slug not in selected:
-            continue
+    order = [slug for slug in ordered(projects) if slug in selected and slug != "personal"]
+    if "personal" in selected:
+        order.append("personal")
+    for slug in order:
+        if slug == "personal":
+            check_project_routes(projects, "https://zanegiordano.com", check_redirects=False)
         subprocess.run(["npx", "--no-install", "wrangler", "deploy", "--config", str(config_path(slug))],
                        cwd=ROOT, env=env, check=True)
         if slug in domains:
             attach_domain(domain_api, account, zone, domains[slug], f"zane-{slug}")
+        if slug == "personal":
+            check_project_routes(projects, "https://zanegiordano.com")
 
 
 def main():

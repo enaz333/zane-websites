@@ -1,7 +1,8 @@
 import { isPhotoNotesAlias, photoNotesPath, redirect, serveAssets } from './routing.mjs';
+import { addProjectDirectory, projectRedirect } from './project-directory.mjs';
 
 export default {
-  fetch(request, env) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     if (isPhotoNotesAlias(url.pathname)) {
       return redirect(url, photoNotesPath);
@@ -18,6 +19,15 @@ export default {
         headers: { 'Cache-Control': 'no-store' },
       });
     }
-    return serveAssets(request, env.ASSETS, url);
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      const project = projectRedirect(url, env.STAGING_PROJECT_ORIGINS);
+      if (project) return project;
+    }
+    const homepage = url.pathname === '/' || url.pathname === '/index.html';
+    const response = await serveAssets(request, env.ASSETS, url);
+    if (homepage && request.method === 'GET' && response.ok) {
+      return addProjectDirectory(response);
+    }
+    return response;
   },
 };

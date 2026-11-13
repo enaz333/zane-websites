@@ -13,7 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from projects import ROOT, config_path, load, ordered
+from projects import ROOT, config_path, load, ordered, public_redirects
 
 
 USER_AGENT = "zane-websites-smoke/1.0 (+https://github.com/enaz333/zane-websites)"
@@ -29,6 +29,8 @@ def staging_config(slug, names, origins):
     config.update(name=names[slug], workers_dev=True)
     for binding in config.get("services", []):
         binding["service"] = names[binding["service"].removeprefix("zane-")]
+    if slug == "personal":
+        config.setdefault("vars", {})["STAGING_PROJECT_ORIGINS"] = origins
     if slug == "club":
         for var, target in (("PERSONAL_ORIGIN", "personal"), ("ACL_ORIGIN", "acl"),
                             ("COACHELLA_ORIGIN", "coachella")):
@@ -82,6 +84,20 @@ def check(opener, origin, path, status, *, location=None, marker=None, method="G
     if last_forbidden is not None:
         problem += f" (last HTTP 403 details: {last_forbidden})"
     raise ValueError(f"{method} {request.full_url}: {problem}")
+
+
+def check_project_routes(projects, personal_origin, origins=None, *, check_redirects=True):
+    opener = build_opener(NoRedirect())
+    query = "?routing_check=launch&value=a%2Bb"
+    for slug, (short_path, canonical) in public_redirects(projects).items():
+        url = urlsplit(canonical)
+        origin = origins[slug] if origins else f"{url.scheme}://{url.netloc}"
+        destination = url.path + query
+        check(opener, origin, destination, 200)
+        if check_redirects:
+            for suffix in ("", "/"):
+                check(opener, personal_origin, short_path + suffix + query, 302,
+                      location=origin + destination)
 
 
 def smoke(origins):
@@ -139,6 +155,7 @@ def main():
             print(origins[slug], flush=True)
     if not args.dry_run:
         smoke(origins)
+        check_project_routes(projects, origins["personal"], origins)
         if summary := os.getenv("GITHUB_STEP_SUMMARY"):
             with open(summary, "a") as file:
                 file.write("All launch smoke checks passed.\n\n")

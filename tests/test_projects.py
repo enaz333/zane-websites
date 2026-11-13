@@ -39,6 +39,8 @@ class RegistryTests(unittest.TestCase):
         entry = load(self.root)["new-site"]
         self.assertFalse(entry["enabled"])
         self.assertEqual(entry["subdomain"], "new-site")
+        self.assertEqual(entry["short_path"], "/new-site")
+        self.assertEqual(entry["canonical_url"], "https://new-site.zanegiordano.com/")
         with self.assertRaisesRegex(ValueError, "disabled"):
             select(load(self.root), argparse.Namespace(project="new-site"))
         for slug in ("new-site", "all", "www", "../outside"):
@@ -67,6 +69,20 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Duplicate JSON key"):
             parse('{"test": 1, "test": 2}')
 
+    def test_route_collisions_and_personal_loops_are_rejected(self):
+        for path, destination, reason in (
+            ("/PhotoNotes", "https://acl.zanegiordano.com/acl/", "reserved"),
+            ("/thanks", "https://acl.zanegiordano.com/acl/", "reserved"),
+            ("/coachella", "https://acl.zanegiordano.com/acl/", "match its slug"),
+            ("/acl", "https://www.zanegiordano.com/coachella", "point back"),
+        ):
+            with self.subTest(path=path, destination=destination):
+                registry = json.loads((ROOT / "projects.json").read_text())
+                registry["acl"].update(short_path=path, canonical_url=destination)
+                self.save(registry)
+                with self.assertRaisesRegex(ValueError, reason):
+                    load(self.root)
+
     def test_changes_select_only_affected_enabled_projects(self):
         self.git("init", "-q")
         before = self.commit()
@@ -78,11 +94,15 @@ class RegistryTests(unittest.TestCase):
         registry["new-site"]["enabled"] = True
         self.save(registry)
         after_approval = self.commit()
-        self.assertEqual(affected(registry, after, after_approval, self.root), {"new-site"})
+        self.assertEqual(affected(registry, after, after_approval, self.root), {"new-site", "personal"})
+        registry["acl"]["canonical_url"] = "https://acl.zanegiordano.com/new/"
+        self.save(registry)
+        route_change = self.commit()
+        self.assertEqual(affected(registry, after_approval, route_change, self.root), {"acl", "personal"})
         with (self.root / "workers/prefixed-site.mjs").open("a") as shared:
             shared.write("\n// shared change\n")
         final = self.commit()
-        self.assertEqual(affected(registry, after_approval, final, self.root),
+        self.assertEqual(affected(registry, route_change, final, self.root),
                          {"acl", "coachella", "photo-notes"})
 
 

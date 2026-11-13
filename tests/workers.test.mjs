@@ -81,3 +81,22 @@ test('Standalone roots redirect and prefixed HTML retains explicit file URLs', a
     assert.equal((await prefixedSite.fetch(request(vars.SITE_PREFIX + '/'), env)).status, 200);
   }
 });
+
+test('Personal redirects exact registered short URLs and preserves the query', async () => {
+  const env = { ASSETS: mockAssets([]) };
+  for (const slug of ['acl', 'coachella']) {
+    for (const slash of ['', '/']) {
+      const response = await personal.fetch(request(`/${slug}${slash}?q=a%2Bb&tag=one&tag=two`), env);
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get('Location'),
+                   `https://${slug}.zanegiordano.com/${slug}/?q=a%2Bb&tag=one&tag=two`);
+    }
+  }
+  for (const path of ['/unknown', '/acl/extra', '/ACL', '/acl//', '/api', '/BuildFest']) {
+    assert.equal((await personal.fetch(request(path), env)).status, 404);
+  }
+  const staged = await personal.fetch(request('/acl'), {
+    ...env, STAGING_PROJECT_ORIGINS: { acl: 'https://staged-acl.example' },
+  });
+  assert.equal(staged.headers.get('Location'), 'https://staged-acl.example/acl/');
+});

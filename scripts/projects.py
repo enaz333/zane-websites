@@ -9,11 +9,20 @@ import re
 import shutil
 import subprocess
 import tempfile
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,56}[a-z0-9])?")
 RESERVED = {"all", "acl", "coachella", "www", "mail", "api", "admin", "autodiscover"}
-FIELDS = {"enabled", "subdomain", "depends_on", "watch"}
+FIELDS = {"enabled", "subdomain", "depends_on", "watch", "short_path", "canonical_url"}
+INTERNAL_ROUTES = {
+    "personal": ("/", "https://zanegiordano.com/"),
+    "photo-notes": ("/PhotoNotes", "https://zanegiordano.com/PhotoNotes"),
+}
+RESERVED_PATHS = RESERVED - {"acl", "coachella"} | {
+    "personal", "photonotes", "photo-notes", "thanks", "assets", "buildfest",
+    "health", "healthz", "login", "logout", "oauth", "callback", "signup", "cdn-cgi",
+}
 CONFIG_FIELDS = {"name", "main", "compatibility_date", "workers_dev", "preview_urls",
                  "assets", "vars", "services"}
 
@@ -45,6 +54,33 @@ def ordered(projects):
     return list(TopologicalSorter(graph).static_order())
 
 
+def public_redirects(projects):
+    return {slug: (entry["short_path"], entry["canonical_url"])
+            for slug, entry in projects.items()
+            if entry["enabled"] and slug not in INTERNAL_ROUTES and "short_path" in entry}
+
+
+def check_public_route(slug, entry):
+    path, url = entry["short_path"], entry["canonical_url"]
+    if slug in INTERNAL_ROUTES:
+        if (path, url) != INTERNAL_ROUTES[slug]:
+            raise ValueError(f"{slug}: internal route is reserved")
+        return
+    if path != f"/{slug}" or slug in RESERVED_PATHS:
+        raise ValueError(f"{slug}: short path must match its slug and avoid reserved paths")
+    if not isinstance(url, str) or any(c.isspace() or ord(c) < 32 for c in url) or "\\" in url:
+        raise ValueError(f"{slug}: invalid canonical URL")
+    parts = urlsplit(url)
+    if (parts.scheme != "https" or not parts.hostname or parts.netloc != parts.hostname
+            or not re.fullmatch(r"[a-z0-9.-]+", parts.hostname)
+            or not parts.path.startswith("/") or "?" in url or "#" in url):
+        raise ValueError(f"{slug}: canonical URL must be HTTPS with a path and no query or fragment")
+    if parts.hostname.rstrip(".") in {"zanegiordano.com", "www.zanegiordano.com"}:
+        raise ValueError(f"{slug}: canonical URL would point back to the personal router")
+    if entry["subdomain"] and parts.hostname != f"{entry['subdomain']}.zanegiordano.com":
+        raise ValueError(f"{slug}: canonical host must match the managed subdomain")
+
+
 def load(root=ROOT):
     projects = parse((root / "projects.json").read_text())
     if not isinstance(projects, dict) or not projects:
@@ -74,6 +110,7 @@ def load(root=ROOT):
             if (not path.startswith("workers/") or file.relative_to(root).as_posix() != path
                     or not file.is_file() or not file.resolve().is_relative_to(root / "workers")):
                 raise ValueError(f"{slug}: watch path must be an existing file under workers/")
+        check_public_route(slug, entry)
         check_config(root, slug, entry)
     for slug in ordered(projects):
         if projects[slug]["enabled"]:
@@ -125,7 +162,7 @@ def affected(projects, before, after, root=ROOT):
                         if subprocess.run(["git", "cat-file", "-e", f"{rev}:projects.json"],
                                           cwd=root, capture_output=True).returncode == 0 else {}
                         for rev in (before, after))
-    return {
+    selected = {
         slug for slug, entry in projects.items()
         if entry["enabled"] and (
             previous.get(slug) != merged.get(slug)
@@ -133,18 +170,22 @@ def affected(projects, before, after, root=ROOT):
             or paths.intersection(set(entry["watch"]) | set(previous.get(slug, {}).get("watch", [])))
         )
     }
+    if public_redirects(previous) != public_redirects(merged):
+        selected.add("personal")
+    return selected
 
 
 def scaffold(slug, root=ROOT):
     projects = load(root)
-    if not SLUG.fullmatch(slug) or slug in RESERVED or slug in projects:
+    if not SLUG.fullmatch(slug) or slug in RESERVED_PATHS or slug in projects:
         raise ValueError(f"Invalid, reserved or existing slug: {slug}")
     if any(project["subdomain"] == slug for project in projects.values()):
         raise ValueError(f"Subdomain already in registry: {slug}")
     destination = root / "sites" / slug
     if destination.exists() or destination.is_symlink():
         raise ValueError(f"Path already exists: {destination}")
-    projects[slug] = {"enabled": False, "subdomain": slug, "depends_on": [], "watch": []}
+    projects[slug] = {"enabled": False, "subdomain": slug, "depends_on": [], "watch": [],
+                      "short_path": f"/{slug}", "canonical_url": f"https://{slug}.zanegiordano.com/"}
     with tempfile.TemporaryDirectory(dir=root) as work:
         temp = Path(work)
         site = temp / slug

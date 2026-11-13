@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
+
+from projects import load, public_redirects
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +36,7 @@ class Markup(HTMLParser):
 
 
 def main():
+    short_paths = {path for path, _ in public_redirects(load()).values()}
     manifest = json.loads((ROOT / 'docs/archive-sha256.json').read_text())['files']
     manifest.update(json.loads((ROOT / 'docs/public-asset-sha256.json').read_text()))
     for rel, expected in manifest.items():
@@ -62,7 +65,7 @@ def main():
                     if not url or url.startswith(('#', '//')) or parsed.scheme:
                         continue
                     path = unquote(parsed.path)
-                    if public.parent.name == 'personal' and path == '/PhotoNotes':
+                    if public.parent.name == 'personal' and (path == "/PhotoNotes" or path in short_paths):
                         continue  # Handled by the personal Worker service binding.
                     target = public / path.lstrip('/') if path.startswith('/') else p.parent / path
                     exists = target.is_file() or (target / 'index.html').is_file()
@@ -87,7 +90,7 @@ def main():
           and all('disabled' in a for t, a in personal.tags if t == 'button' and a.get('type') == 'submit'),
           'Signup must remain paused until a backend is configured')
     project_links = {a.get('href') for t, a in personal.tags if t == 'a'}
-    for required in ('https://coolstrangersclub.com/', '/PhotoNotes', 'https://acl.zanegiordano.com/acl/', 'https://coachella.zanegiordano.com/coachella/'):
+    for required in ('https://coolstrangersclub.com/', '/PhotoNotes', '/acl', '/coachella'):
         check(required in project_links, f'Missing migrated project link: {required}')
     print(f'{checks} checks; {len(errors)} failures')
     for error in errors:

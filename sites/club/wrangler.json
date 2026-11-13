@@ -8,19 +8,7 @@
     "directory": "./public",
     "binding": "ASSETS",
     "html_handling": "none",
-    "run_worker_first": [
-      "/BuildFest",
-      "/PhotoNotes",
-      "/PhotoNotes/*",
-      "/photonotes",
-      "/photonotes/*",
-      "/photo-notes",
-      "/photo-notes/*",
-      "/acl",
-      "/acl/*",
-      "/coachella",
-      "/coachella/*"
-    ]
+    "run_worker_first": true
   },
   "vars": {
     "PERSONAL_ORIGIN": "https://zanegiordano.com",

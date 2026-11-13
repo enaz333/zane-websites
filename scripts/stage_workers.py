@@ -154,7 +154,10 @@ def main():
                 subprocess.run(command, cwd=ROOT, check=True)
             print(origins[slug], flush=True)
     if not args.dry_run:
+        from check_club_launch import candidate
+
         smoke(origins)
+        candidate(origins["club"], origins["personal"], origins["acl"], origins["coachella"])
         check_project_routes(projects, origins["personal"], origins)
         if summary := os.getenv("GITHUB_STEP_SUMMARY"):
             with open(summary, "a") as file:

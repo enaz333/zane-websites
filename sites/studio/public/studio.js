@@ -66,18 +66,45 @@ function node(tag, text) {
   return el;
 }
 
+const labels = {
+  submitted: 'Submitted', queued: 'Queued', running: 'Running', validating: 'Validating',
+  pr_ready: 'PR ready', failed: 'Failed', cancelled: 'Cancelled',
+};
+const progress = {
+  submitted: 'Saved for review.',
+  queued: 'Waiting for an executor.',
+  running: 'Claimed by the executor.',
+  validating: 'Checking the proposed changes.',
+  pr_ready: 'Ready for GitHub review.',
+};
+const failures = {
+  execution_failed: 'The executor could not complete the request.',
+  checks_failed: 'Validation checks failed.',
+  lease_expired: 'The execution timed out.',
+};
+const formatTime = value => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  .format(new Date(value));
+
 function taskRow(task) {
   const row = document.createElement('li');
   const project = names[task.project] || task.project;
-  const status = task.status === 'cancelled' ? 'Cancelled' : 'Submitted';
+  const status = labels[task.status] || 'Unknown state';
   row.append(node('h3', task.title || `Edit · ${project}`));
   const destination = task.slug ? `zanegiordano.com/${task.slug} · ${project || 'Independent application'}` : task.page;
   if (destination) row.append(node('small', destination));
-  const time = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-    .format(new Date(task.updated_at));
-  row.append(node('small', `${status} · ${task.asap ? 'As soon as possible' : 'Economy preferred'} · ${time}`));
+  row.append(node('small', `${status} · ${task.asap ? 'As soon as possible' : 'Economy preferred'} · ${formatTime(task.updated_at)}`));
   row.append(node('p', task.description));
-  if (task.status === 'submitted') {
+  const detail = progress[task.status] || failures[task.failure_code];
+  if (detail) row.append(node('small', detail));
+  if (task.started_at) row.append(node('small', `Started ${formatTime(task.started_at)}`));
+  if (task.finished_at) row.append(node('small', `Finished ${formatTime(task.finished_at)}`));
+  if (task.check_status) row.append(node('small', task.check_status === 'passed' ? 'Checks passed' : 'Checks failed'));
+  if (task.status === 'pr_ready' && Number.isSafeInteger(task.pr_number) && task.pr_number > 0) {
+    const link = node('a', `Open pull request #${task.pr_number}`);
+    link.href = `https://github.com/enaz333/zane-websites/pull/${task.pr_number}`;
+    row.append(link);
+  }
+  if (['submitted', 'queued'].includes(task.status)) {
     const cancel = node('button', 'Cancel request');
     cancel.type = 'button';
     cancel.className = 'quiet';

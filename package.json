@@ -1,0 +1,7 @@
+{
+  "name": "zane-websites",
+  "private": true,
+  "devDependencies": {
+    "wrangler": "4.161.0"
+  }
+}

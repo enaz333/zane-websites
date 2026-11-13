@@ -12,3 +12,15 @@ subscriber-exports/
 exports/
 node_modules/
 dist/
+*.crt
+*.kdbx
+*service-account*.json
+*.sqlite
+*.sqlite3
+*.db
+*.log
+subscribers/
+build/
+coverage/
+__pycache__/
+*.py[cod]

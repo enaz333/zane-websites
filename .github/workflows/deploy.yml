@@ -1,0 +1,75 @@
+name: Publish Workers
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Enabled project slug, or all
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  queue: max
+
+jobs:
+  publish:
+    # Change false to true in a reviewed PR after Cloudflare staging verification.
+    if: ${{ false && github.ref == 'refs/heads/main' && github.ref_protected && vars.WORKERS_PUBLISH_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: cloudflare-production
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Verify and plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          PROJECT: ${{ inputs.project }}
+        shell: bash
+        run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            python3 scripts/deploy_workers.py --project "$PROJECT"
+          else
+            python3 scripts/deploy_workers.py --before "$BEFORE_SHA" --after "$AFTER_SHA"
+          fi
+          python3 scripts/validate.py
+          python3 -m unittest discover -s tests -v
+          node --test tests/workers.test.mjs
+      - name: Publish in dependency order
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          PROJECT: ${{ inputs.project }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ secrets.CLOUDFLARE_DOMAIN_API_TOKEN }}
+        shell: bash
+        run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            python3 scripts/deploy_workers.py --apply --project "$PROJECT"
+          else
+            python3 scripts/deploy_workers.py --apply --before "$BEFORE_SHA" --after "$AFTER_SHA"
+          fi

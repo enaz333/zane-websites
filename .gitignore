@@ -27,6 +27,7 @@ exports/
 *.tsv
 *.sqlite
 *.sqlite3
+*.db
 
 # Generated output and local tooling
 dist/

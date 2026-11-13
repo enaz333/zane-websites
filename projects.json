@@ -1,0 +1,53 @@
+{
+  "acl": {
+    "depends_on": [],
+    "enabled": true,
+    "subdomain": null,
+    "watch": [
+      "workers/prefixed-site.mjs",
+      "workers/routing.mjs"
+    ]
+  },
+  "club": {
+    "depends_on": [
+      "acl",
+      "coachella",
+      "personal"
+    ],
+    "enabled": true,
+    "subdomain": null,
+    "watch": [
+      "workers/club.mjs",
+      "workers/routing.mjs"
+    ]
+  },
+  "coachella": {
+    "depends_on": [],
+    "enabled": true,
+    "subdomain": null,
+    "watch": [
+      "workers/prefixed-site.mjs",
+      "workers/routing.mjs"
+    ]
+  },
+  "personal": {
+    "depends_on": [
+      "photo-notes"
+    ],
+    "enabled": true,
+    "subdomain": null,
+    "watch": [
+      "workers/personal.mjs",
+      "workers/routing.mjs"
+    ]
+  },
+  "photo-notes": {
+    "depends_on": [],
+    "enabled": true,
+    "subdomain": null,
+    "watch": [
+      "workers/prefixed-site.mjs",
+      "workers/routing.mjs"
+    ]
+  }
+}

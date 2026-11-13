@@ -1,6 +1,6 @@
 # Zane’s websites
 
-Five independently deployable Cloudflare Workers with Static Assets share this repository. Each site has its own `wrangler.json` and serves assets from its own `public/` directory.
+Independently deployable Cloudflare Workers with Static Assets share this repository. Each site has its own `wrangler.json` and serves assets from its own `public/` directory.
 
 | Project | Source and Wrangler config | Intended public entry |
 | --- | --- | --- |
@@ -16,10 +16,12 @@ Five independently deployable Cloudflare Workers with Static Assets share this r
 
 ## Local checks
 
-Use Python 3.9+ and Node.js 22.
+Use Python 3.12 and Node.js 22. Install the pinned Wrangler with `npm ci`.
 
 ```sh
 python3 scripts/validate.py
+python3 scripts/projects.py validate
+python3 -m unittest discover -s tests -v
 node --test tests/workers.test.mjs
 ```
 
@@ -31,4 +33,8 @@ wrangler dev -c sites/personal/wrangler.json -c sites/photo-notes/wrangler.json
 
 Start a standalone project by passing its single config, for example `wrangler dev -c sites/club/wrangler.json`. The checked-in Club destination URLs are the intended production hosts. Use local Wrangler variable overrides to exercise redirects against other local Worker instances.
 
-The personal signup UI is paused while a replacement for Netlify Forms is chosen. The thank-you page remains available as source, and a form POST receives 503. All five configs omit domain routes and disable public Worker preview URLs. See [Cloudflare migration notes](docs/cloudflare.md) for future CI, staging and launch work.
+The personal signup UI is paused while a replacement for Netlify Forms is chosen. The thank-you page remains available as source, and a form POST receives 503. Wrangler configs omit domain routes and disable public Worker preview URLs. See [Cloudflare migration notes](docs/cloudflare.md) for staging and launch work.
+
+Use [projects.json](projects.json) and the [onboarding and publishing guide](docs/publishing.md) to add a Worker, set up GitHub approvals, and configure optional subdomain provisioning.
+
+See [Security](SECURITY.md) for reporting and credential handling and [public release preparation](docs/public-release.md) for the one-time history cleanup and GitHub Free setup.

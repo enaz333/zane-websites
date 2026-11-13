@@ -1,0 +1,42 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Workers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: python3 scripts/validate.py
+      - run: python3 scripts/projects.py validate
+      - run: python3 -m unittest discover -s tests -v
+      - run: node --test tests/workers.test.mjs
+      - name: Dry-run every registered Worker
+        shell: bash
+        run: |
+          python3 scripts/projects.py configs > "$RUNNER_TEMP/worker-configs"
+          while IFS= read -r config; do
+            output=$(mktemp -d "$RUNNER_TEMP/worker.XXXXXX")
+            npx --no-install wrangler deploy --dry-run --config "$config" --outdir "$output"
+          done < "$RUNNER_TEMP/worker-configs"

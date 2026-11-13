@@ -35,6 +35,7 @@ class Markup(HTMLParser):
 
 def main():
     manifest = json.loads((ROOT / 'docs/archive-sha256.json').read_text())['files']
+    manifest.update(json.loads((ROOT / 'docs/public-asset-sha256.json').read_text()))
     for rel, expected in manifest.items():
         if rel == 'README.md':
             continue

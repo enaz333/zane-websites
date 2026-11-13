@@ -19,9 +19,9 @@ The five configs are local preparation for Workers with Static Assets. Review ac
 
 The Club links still use their original relative paths and reach the new destinations through the aliases. Legacy Netlify redirect files are under `netlify-reference/`. Worker code handles route precedence and index serving. Cloudflare `_headers` files retain the scoped festival headers. The original site archive hashes are in [archive-sha256.json](archive-sha256.json). [Cloudflare asset routing](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/) · [Service bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/) · [Asset headers](https://developers.cloudflare.com/workers/static-assets/headers/)
 
-## Future GitHub Actions
+## GitHub Actions
 
-Use a validation job for pull requests and a matrix of the five explicit config paths for local Wrangler dry runs. Pin Wrangler and Actions versions when introducing CI. After staging and owner approval, add a separately triggered deploy job with a protected GitHub environment, a scoped Cloudflare API token stored as an environment secret, and the account ID configured in that environment. Deploy Photo Notes before personal to establish the binding. Deploy the two festival Workers before exposing Club redirects. Changes to shared Worker modules should validate every consumer. Preview personal with a preview-specific Photo Notes binding when doing remote validation. [Cloudflare GitHub Actions documentation](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
+See [onboarding and publishing](publishing.md) for the registry, review gates, Cloudflare secrets and future publishing controls. The existing migration hostnames are managed separately from automatic subdomain provisioning.
 
 ## Before cutover
 

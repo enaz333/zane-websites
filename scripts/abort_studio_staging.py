@@ -42,11 +42,44 @@ def d1(env, config, *args):
         cwd=ROOT, env=env, timeout=180, capture_output=True,
     )
     if result.returncode:
-        raise ValueError("D1 operation failed or its outcome is unknown. Read the task before retrying.")
+        raise ValueError("D1 command did not confirm success")
     (query,) = json.loads(result.stdout)
     if query["success"] is not True:
         raise ValueError("D1 did not confirm success")
-    return query["results"]
+    results = query["results"]
+    if not isinstance(results, list):
+        raise ValueError("Invalid D1 results")
+    return results
+
+
+def import_and_verify(query, before, audit):
+    """Run the import once and determine its outcome from read-only evidence."""
+    confirmed = False
+    try:
+        (result,) = query("--file", str(SQL))
+        confirmed = result["Total queries executed"] == 4
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        pass
+
+    try:
+        (after,) = query("--command", SNAPSHOT)
+        events = query("--command", AUDIT)
+        finished = after["finished_at"]
+        expected = dict(before, state="failed", failure_code="execution_failed", phase="done",
+                        lock_id=None, lock_until=None, lock_expired=None, active=0, finished_at=finished)
+        terminal = (after == expected and isinstance(finished, str)
+                    and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z", finished)
+                    and len(events) == len(audit) + 1 and events[:-1] == audit
+                    and events[-1]["task_id"] == TASK and events[-1]["state"] == "failed"
+                    and events[-1]["occurred_at"] == finished and events[-1]["id"] > audit[-1]["id"])
+    except (OSError, ValueError, KeyError, IndexError, TypeError, subprocess.SubprocessError):
+        raise ValueError("recovery_verification_unavailable: D1 outcome unverified. Inspect before retrying.") from None
+
+    if terminal:
+        return "recovery_import_confirmed" if confirmed else "recovery_import_verified_after_unclear_response"
+    if not confirmed and after == before and events == audit:
+        raise ValueError("recovery_original_state_observed: D1 still shows the reviewed starting state. Inspect before retrying.")
+    raise ValueError("recovery_state_mismatch: D1 differs from the reviewed terminal state. Inspect before retrying.")
 
 
 def require_no_publication():
@@ -108,21 +141,16 @@ def abort(env):
         require_no_publication()
         if require_disabled(worker) != version:
             raise ValueError("Dispatcher changed during the recovery preflight")
-        # --file uses D1 import with rollback on failure, rather than separate queries.
-        (result,) = d1(db_env, config, "--file", str(SQL))
-        if result["Total queries executed"] != 4:
-            raise ValueError("D1 did not confirm both updates and their row-count assertions")
-        (after,) = d1(db_env, config, "--command", SNAPSHOT)
-        events = d1(db_env, config, "--command", AUDIT)
-        expected.update(state="failed", failure_code="execution_failed", phase="done",
-                        lock_id=None, lock_until=None, lock_expired=None, active=0,
-                        finished_at=after["finished_at"])
-        if (after != expected or not after["finished_at"] or len(events) != len(audit) + 1
-                or events[:-1] != audit or events[-1]["state"] != "failed"):
-            raise ValueError("Recovery outcome differs from the reviewed result. Inspect before retrying.")
-        require_no_publication()
-        if require_disabled(worker) != version:
-            raise ValueError("Dispatcher version changed during recovery. Inspect the completed D1 write.")
+        # --file uses D1 import with rollback on failure.
+        outcome = import_and_verify(lambda *args: d1(db_env, config, *args), before, audit)
+        record(outcome + ": D1 terminal state and reservation verified.")
+        try:
+            require_no_publication()
+            if require_disabled(worker) != version:
+                raise ValueError("Dispatcher version changed")
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            raise ValueError("recovery_postflight_unverified: D1 terminal state verified. "
+                             "GitHub or dispatcher verification failed. Inspect before retrying.") from None
         record("Original staging task failed with execution_failed. Dispatch done, lock cleared, "
                "zero active dispatches, November reservation 262548, prior audit preserved, "
                "no token usage or matching GitHub publication. Dispatcher disabled with no cron.")

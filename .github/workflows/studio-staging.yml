@@ -11,6 +11,9 @@ on:
         description: Preserve web version 427e7aff and deploy only the missing disabled dispatcher
         type: boolean
         default: false
+      refresh_dispatcher_version:
+        description: Active dispatcher version UUID to replace with the disabled Luna release (blank for other modes)
+        type: string
 
 permissions:
   contents: read
@@ -63,6 +66,7 @@ jobs:
       - name: Initialize private Studio staging
         env:
           STUDIO_RECOVER_DISPATCHER: ${{ inputs.recover_dispatcher }}
+          STUDIO_REFRESH_DISPATCHER_VERSION: ${{ inputs.refresh_dispatcher_version }}
           STUDIO_STAGING_RELEASE_ENABLED: ${{ vars.STUDIO_STAGING_RELEASE_ENABLED }}
           REVIEWED_SHA: ${{ inputs.reviewed_sha }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

@@ -105,6 +105,48 @@ class StudioStagingReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "different version"):
             release.wait_for_version(worker, release.RECOVERY_WEB_VERSION)
 
+    def test_refresh_requires_reviewed_active_version(self):
+        worker = Mock()
+        worker.active.return_value = STAGING
+        with patch.object(release, "deploy_worker") as deploy:
+            with self.assertRaisesRegex(ValueError, "reviewed baseline"):
+                release.refresh_dispatcher(worker, Path("/tmp/plan"), {}, {}, STAGING, PRODUCTION, BASE)
+            deploy.assert_not_called()
+
+    def test_refresh_uses_reviewed_base_and_deploys_only_disabled_dispatcher(self):
+        worker = Mock()
+        worker.active.return_value = PRODUCTION
+        worker.script.return_value = {"resources": {"bindings": [
+            {"type": "d1", "name": "DB", "database_id": STAGING},
+            {"type": "plain_text", "name": "STUDIO_STAGING_ID", "text": STAGING},
+            {"type": "plain_text", "name": "STUDIO_EXECUTION_ENABLED", "text": "false"},
+        ]}}
+        with tempfile.TemporaryDirectory() as directory:
+            plan = Path(directory) / "plan"
+            args = argparse.Namespace(base=BASE, database=STAGING, production_database=PRODUCTION, out=plan)
+            with patch.object(release.subprocess, "check_output", return_value=BASE):
+                release.prepare(args)
+            with (patch.object(release, "require_inert_dispatcher"),
+                  patch.object(release, "verify_marker") as marker,
+                  patch.object(release, "record"),
+                  patch.object(release, "deploy_worker") as deploy):
+                release.refresh_dispatcher(worker, plan, {}, {}, STAGING, PRODUCTION, BASE)
+                marker.assert_called_once_with(plan, {}, STAGING)
+                deploy.assert_called_once_with(worker, plan / "dispatcher.json", {}, BASE, STAGING,
+                                               previous=PRODUCTION, rate_card=release.LUNA_RATE_CARD)
+            config = json.loads((plan / "dispatcher.json").read_text())
+            self.assertEqual(config["vars"], {
+                "STUDIO_BASE_SHA": BASE, "STUDIO_STAGING_ID": STAGING, "STUDIO_EXECUTION_ENABLED": "false",
+                "STUDIO_RUN_MICROS": "262548", "STUDIO_MONTH_MICROS": "262548",
+                "STUDIO_RATE_CARD": release.LUNA_RATE_CARD,
+            })
+
+    def test_refresh_waits_for_new_version_while_baseline_is_visible(self):
+        worker = Mock()
+        worker.active.side_effect = [STAGING, PRODUCTION]
+        with patch.object(release.time, "sleep"):
+            release.wait_for_version(worker, PRODUCTION, STAGING)
+
     def test_recovery_deploys_only_dispatcher_after_marker_and_baseline(self):
         web, dispatcher = Mock(), Mock()
         web.active.return_value = release.RECOVERY_WEB_VERSION

@@ -72,3 +72,30 @@ reads the existing marker before deploying only the missing disabled
 dispatcher. It does not rerun migrations, write the marker, or redeploy the web
 Worker. If any precondition fails, inspect the summary and stop; do not switch
 to initialization mode to bypass it.
+
+## Refresh the existing disabled dispatcher to Luna
+
+Review and merge the workflow change on protected main. Fetch `origin/main` and
+record its full SHA. Build and smoke-test the validator from that SHA. After
+separate approval, push that exact image and deploy its registry digest to
+staging Cloud Run. Verify the new revision receives 100% of traffic and repeat
+the HTTPS probes, including a passing response with the reviewed base SHA.
+
+Confirm GitHub main still matches that SHA and copy the full UUID of the
+active dispatcher version from Cloudflare Deployments. After separate
+dispatcher deployment approval, start a fresh **Initialize Studio staging**
+run on main. Set `reviewed_sha` to that same full SHA, enter the active
+dispatcher UUID in `refresh_dispatcher_version`, and leave
+`recover_dispatcher` off. Use the existing `cloudflare-studio-staging`
+environment, set its staging release opt-in as documented above, and approve
+the pending run as the owner. The workflow verifies the checkout against the
+reviewed main SHA and uses it for both the bundle and `STUDIO_BASE_SHA`.
+If main advances, review the new SHA and rebuild the validator before release.
+The summary records the previous and new Worker versions and the verified
+D1 marker.
+
+The refresh deploys only the dispatcher. It uses the existing staging D1
+binding and reads the marker without applying migrations. The dispatcher has
+execution disabled, no task UUID, no AI credentials, and no public endpoints
+or cron. Both budget variables are `262548`, and the rate card is
+`gpt-6-luna:standard:0.10:0.01:0.125:0.50:0.20:0.02:0.25:0.75`.

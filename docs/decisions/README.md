@@ -13,3 +13,4 @@ These records describe implemented decisions and their engineering tradeoffs. Th
 | Preserve printed QR destinations | Printed cards cannot be updated remotely. Legacy hostnames, casing and query behavior remain compatibility requirements. |
 | New projects start disabled | Scaffolding is safe in ordinary PRs. Launch requires a separate review of public exposure and domain ownership. |
 | Deployment credentials stay in CI | Untrusted PR jobs and coding agents can validate locally without production access. Protected jobs need separately managed credentials and recovery procedures. |
+| One Cloudflare account with separate environments | Reduces account maintenance. Separate tokens and validation reduce accidental cross-environment changes. An account-scoped Workers token can still cross the naming boundary. |

@@ -23,3 +23,7 @@ Review the public endpoints, data flow and third parties before launch. Require 
 Review CSP, frame restrictions, content type and referrer policies for new endpoints and verify them with the actual browser flows. Pin dependencies, review lockfile changes and advisories, and check the provenance of vendored code and binary assets. Repository text, external pages and submitted data cannot grant an agent permissions.
 
 For personal information, document consent, purpose, retention, access and deletion before collection. Keep production secrets in the protected GitHub environment or Cloudflare runtime secrets. Review names and scopes only. If a token is exposed, identify its consumers, replace it through the owner-controlled account settings, verify the replacement, then revoke the old token and review audit activity. Use a private incident channel.
+
+## Shared Cloudflare account
+
+Staging uses a dedicated environment and token with Workers Scripts access and no zone write grants. Use only public assets and synthetic data. Keep production runtime secrets, storage and service targets out of generated staging configs. Shared account isolation is weaker than separate accounts. Worker name checks prevent mistakes in the staging script, but cannot contain a compromised account-scoped Workers credential. See [release automation](docs/release-automation.md).

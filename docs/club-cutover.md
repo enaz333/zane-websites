@@ -1,5 +1,7 @@
 # Cool Strangers Club cutover
 
+> Historical migration record. For current environment setup and dispatch instructions, see [release automation](release-automation.md).
+
 ## Evidence and remaining QR check
 
 The live apex served Netlify, and www returned a 301 to the apex with the path and query preserved. The zone showed no Worker Routes, and both exact hostnames had Netlify-facing A records rather than Worker-managed DNS entries.

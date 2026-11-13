@@ -1,5 +1,7 @@
 # Prepare the first public release
 
+> Historical migration record. For current environment setup and dispatch instructions, see [release automation](release-automation.md).
+
 ## Commit and push with GitHub Desktop
 
 1. Select `zane-websites` in GitHub Desktop and choose **Fetch origin**. Confirm the remote is `https://github.com/enaz333/zane-websites.git`.

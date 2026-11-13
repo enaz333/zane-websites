@@ -1,5 +1,7 @@
 # Cloudflare migration
 
+> Historical migration record. For current environment setup and dispatch instructions, see [release automation](release-automation.md).
+
 The five configs are local preparation for Workers with Static Assets. Review actual host ownership, existing Netlify deploys and rollback targets before scheduling a cutover. The older Netlify guide describes historical preparation.
 
 ## Routes

@@ -1,5 +1,7 @@
 # Onboarding and publishing Workers
 
+> Historical migration record. For current environment setup and dispatch instructions, see [release automation](release-automation.md).
+
 ## Add a project
 
 1. From the repository root, run `python3 scripts/projects.py new my-project`. The template creates `sites/my-project/wrangler.json`, an isolated `public/` directory and a disabled entry in `projects.json`. The Worker will be named `zane-my-project`, with `my-project.zanegiordano.com` proposed as its hostname.

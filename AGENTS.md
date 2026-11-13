@@ -8,3 +8,7 @@
 - Run the README checks and relevant route and browser checks. Report which live behavior was verified. Open a PR when requested. Obtain separate approval for deployment, production infrastructure changes, deletion, credential rotation and real form submissions.
 - Preserve migration evidence, existing temporary aliases and rollback resources. Follow [deployment](docs/deployment.md) for changes to release tooling.
 - Use the protected staging environment in the shared Cloudflare account. Keep staging credentials and test data separate from production. Follow [release automation](docs/release-automation.md) for staging config and permissions.
+
+## Design and content
+
+- Before visual or content changes, read [the Brand Kit](design/BRAND.md) and the relevant project AGENTS.md. Follow approved guidance and preserve project-specific conventions. Treat observations and proposed standards as reference until the owner approves them.

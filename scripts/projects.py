@@ -94,6 +94,8 @@ def load(root=ROOT):
             raise ValueError(f"Invalid project entry: {slug}")
         if type(entry["enabled"]) is not bool:
             raise ValueError(f"{slug}: enabled must be a boolean")
+        if slug == "studio" and (entry["enabled"] or entry["subdomain"] is not None):
+            raise ValueError("studio: private activation requires a separate deployment design")
         subdomain = entry["subdomain"]
         if subdomain is not None:
             if (not isinstance(subdomain, str) or not SLUG.fullmatch(subdomain)
@@ -139,6 +141,10 @@ def check_config(root, slug, entry):
             or config.get("preview_urls") is not False
             or config.get("assets", {}).get("directory") != "./public"):
         raise ValueError(f"{slug}: invalid Worker name, assets directory, or preview settings")
+    if slug == "studio" and (config.get("main") != "../../workers/studio.mjs"
+                             or config.get("assets", {}).get("run_worker_first") is not True
+                             or config.get("assets", {}).get("binding") != "ASSETS"):
+        raise ValueError("studio: all assets must be served through the authenticated Worker")
     main = config.get("main")
     if main is not None:
         script = (path.parent / main).resolve()

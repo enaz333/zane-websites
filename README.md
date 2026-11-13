@@ -11,7 +11,8 @@ npm ci
 python3 scripts/validate.py
 python3 scripts/projects.py validate
 python3 -m unittest discover -s tests -v
-node --test tests/workers.test.mjs
+python3 scripts/studio_paths.py --check
+node --test tests/*.test.mjs
 ```
 
 Preview personal and Photo Notes together with `npx --no-install wrangler dev -c sites/personal/wrangler.json -c sites/photo-notes/wrangler.json`. For a standalone site, pass its own config. Local preview does not establish live DNS, TLS or third-party integration health.

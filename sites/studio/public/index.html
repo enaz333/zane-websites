@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Zane Studio</title>
+  <link rel="stylesheet" href="/studio.css">
+  <script type="module" src="/studio.js"></script>
+</head>
+<body>
+  <header class="masthead"><div class="wrap mast-inner">
+    <a class="wordmark" href="/"><span class="mark" aria-hidden="true">Z</span> Zane Studio</a>
+    <span class="badge"><span aria-hidden="true"></span>Private workspace</span>
+  </div></header>
+  <main class="wrap">
+    <section class="intro" aria-labelledby="headline">
+      <p class="eyebrow">Website workspace</p>
+      <h1 id="headline">Make something<br>worth sharing<span>.</span></h1>
+      <p>Request a change, start something new, or pick up where you left off.</p>
+    </section>
+    <nav aria-label="Studio" class="tabs">
+      <a href="#edit" aria-current="page">Edit</a>
+      <a href="#new">Add New</a>
+      <a href="#activity">Activity</a>
+    </nav>
+    <p id="notice" class="notice" role="status"></p>
+    <div class="workspace">
+      <section id="edit" class="card" aria-labelledby="edit-heading">
+        <h2 id="edit-heading">Edit a website</h2>
+        <p class="sub">Tell Studio what you’d like to change.</p>
+        <form data-kind="edit">
+          <label>Website<select name="project" required disabled><option value="">Loading websites…</option></select></label>
+          <label>Page or URL <span class="optional">Optional</span><input name="page" maxlength="512" placeholder="/about or https://…"></label>
+          <label>What should change?<textarea name="description" required maxlength="4000" rows="5" placeholder="Describe the change and what a good result looks like."></textarea></label>
+          <label class="priority"><input type="checkbox" name="asap"><span>As soon as possible<small>Unchecked requests prefer economy when execution is available.</small></span></label>
+          <button type="submit" disabled>Save request <span aria-hidden="true">↗</span></button>
+        </form>
+      </section>
+      <section id="new" class="card" aria-labelledby="new-heading" hidden>
+        <h2 id="new-heading">Start something new</h2>
+        <p class="sub">Capture an idea and propose its short URL.</p>
+        <form data-kind="new">
+          <label>Title<input name="title" required maxlength="120" placeholder="Field Notes"></label>
+          <label>URL slug<span class="slug"><span aria-hidden="true">zanegiordano.com/</span><input name="slug" required maxlength="57" pattern="[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?" placeholder="field-notes" autocapitalize="none" spellcheck="false" aria-describedby="slug-help"></span>
+          <small id="slug-help">This proposes a path on zanegiordano.com.</small></label>
+          <label>Build type<select name="kind"><option value="page">Page on an existing website</option><option value="app">Independent application</option></select></label>
+          <label data-project>Website<select name="project" required disabled><option value="">Loading websites…</option></select></label>
+          <label>What should it do?<textarea name="description" required maxlength="4000" rows="5" placeholder="Describe the idea and how people will use it."></textarea></label>
+          <label class="priority"><input type="checkbox" name="asap"><span>As soon as possible<small>Unchecked requests prefer economy when execution is available.</small></span></label>
+          <button type="submit" disabled>Save request <span aria-hidden="true">↗</span></button>
+        </form>
+      </section>
+      <section id="activity" class="card" aria-labelledby="activity-heading" hidden>
+        <div class="card-head"><h2 id="activity-heading">Request history</h2><button id="refresh" class="quiet" type="button">Refresh</button></div>
+        <p class="sub">Submitted and cancelled requests appear here.</p>
+        <p id="empty" class="empty"></p>
+        <ol id="history"></ol>
+        <button id="more" class="quiet" type="button" hidden>Load older requests</button>
+      </section>
+      <aside class="aside" aria-label="Workspace status">
+        <p class="eyebrow">Studio today</p>
+        <h2>A place to collect ideas.</h2>
+        <p>Requests are saved for review. Studio isn’t running builders or publishing changes yet.</p>
+        <div class="aside-footer"><span aria-hidden="true">01</span> Request intake</div>
+      </aside>
+    </div>
+    <noscript>JavaScript is required to use Studio.</noscript>
+  </main>
+</body>
+</html>

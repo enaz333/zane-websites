@@ -18,6 +18,7 @@ MIGRATIONS = {"0001_tasks.sql", "0002_execution.sql", "0003_dispatch.sql"}
 ACCESS = ("ACCESS_TEAM_ORIGIN", "ACCESS_AUD", "STUDIO_OWNER_EMAIL")
 RECOVERY_WEB_VERSION = "427e7aff-6a11-4ce0-a6b0-f3d89ff8f735"
 RECOVERY_WEB_SHA = "c8465075f889f7cb4db2e243f4ebac48d0ebcccf"
+LUNA_RATE_CARD = "gpt-6-luna:standard:0.10:0.01:0.125:0.50:0.20:0.02:0.25:0.75"
 
 
 def verify_owner_approval(env):
@@ -110,12 +111,12 @@ class StagingWorker(StudioCloudflare):
         return versions[0]["version_id"]
 
 
-def wait_for_version(worker, version):
+def wait_for_version(worker, version, previous=None):
     for attempt in range(10):
         active = worker.active()
         if active == version:
             return
-        if active is not None:
+        if active is not None and active != previous:
             raise ValueError(f"{worker.worker} is serving a different version; inspect Deployments")
         if attempt < 9:
             time.sleep(2)
@@ -159,7 +160,7 @@ def verify_marker(plan, env, staging):
         raise ValueError("Staging D1 marker verification failed")
 
 
-def deploy_worker(worker, config, env, base, staging, runtime=None):
+def deploy_worker(worker, config, env, base, staging, runtime=None, *, previous=None, rate_card=None):
     output = config.with_suffix(".jsonl")
     flags = []
     if runtime is not None:
@@ -174,12 +175,12 @@ def deploy_worker(worker, config, env, base, staging, runtime=None):
     if entry["worker_name"] != worker.worker or not UUID.fullmatch(version):
         raise ValueError("Unexpected Wrangler deployment result")
     record(f"{worker.worker}: uploaded version `{version}`.")
-    wait_for_version(worker, version)
-    verify_worker_version(worker, version, base, staging, runtime)
+    wait_for_version(worker, version, previous)
+    verify_worker_version(worker, version, base, staging, runtime, rate_card=rate_card)
     record(f"{worker.worker}: version `{version}` active at 100%; workers.dev and previews disabled.")
 
 
-def verify_worker_version(worker, version, base, staging, runtime=None):
+def verify_worker_version(worker, version, base, staging, runtime=None, *, rate_card=None):
     worker.require_private_endpoints()
     info = worker.script(f"versions/{version}")
     if info.get("annotations", {}).get("workers/tag") != base:
@@ -195,6 +196,8 @@ def verify_worker_version(worker, version, base, staging, runtime=None):
     expected_vars = ({"STUDIO_ORIGIN": ORIGIN, "STUDIO_QUEUE_ENABLED": "true"} if runtime is not None else
                      {"STUDIO_STAGING_ID": staging, "STUDIO_BASE_SHA": base, "STUDIO_EXECUTION_ENABLED": "false",
                       "STUDIO_RUN_MICROS": BUDGET, "STUDIO_MONTH_MICROS": BUDGET})
+    if rate_card is not None:
+        expected_vars["STUDIO_RATE_CARD"] = rate_card
     if {binding["name"]: binding["text"] for binding in bindings if binding["type"] == "plain_text"} != expected_vars:
         raise ValueError("Deployed Worker has unexpected runtime variables")
 
@@ -215,6 +218,41 @@ def recover_dispatcher(workers, plan, d1_env, worker_env, base, staging, runtime
         raise ValueError("Web deployment changed during recovery")
 
 
+def require_inert_dispatcher(worker):
+    worker.require_private_endpoints()
+    if (worker.get("/workers/domains?" + urlencode({"service": DISPATCH})) != []
+            or worker.get(f"/workers/services/{DISPATCH}/environments/production/routes") != []
+            or worker.script("schedules")["schedules"] != []):
+        raise ValueError("Dispatcher must have no routes, custom domains, or cron")
+
+
+def refresh_dispatcher(worker, plan, d1_env, worker_env, staging, expected, base):
+    if not UUID.fullmatch(expected) or worker.active() != expected:
+        raise ValueError("Active dispatcher version does not match the reviewed baseline")
+    require_inert_dispatcher(worker)
+    bindings = worker.script(f"versions/{expected}")["resources"]["bindings"]
+    db = [item for item in bindings if item["type"] == "d1"]
+    variables = {item["name"]: item["text"] for item in bindings if item["type"] == "plain_text"}
+    if (len(db) != 1 or db[0]["name"] != "DB" or (db[0].get("database_id") or db[0].get("id")) != staging
+            or variables.get("STUDIO_STAGING_ID") != staging or variables.get("STUDIO_EXECUTION_ENABLED") != "false"
+            or "STUDIO_TEST_TASK_ID" in variables
+            or any(item["type"] not in {"d1", "plain_text"} for item in bindings)):
+        raise ValueError("Existing dispatcher is not disabled with only staging bindings")
+    verify_marker(plan, d1_env, staging)
+    config = plan / "dispatcher.json"
+    dispatcher = json.loads(config.read_text())
+    if dispatcher["vars"]["STUDIO_BASE_SHA"] != base:
+        raise ValueError("Dispatcher config must match the reviewed main SHA")
+    dispatcher["vars"]["STUDIO_RATE_CARD"] = LUNA_RATE_CARD
+    config.write_text(json.dumps(dispatcher))
+    require_inert_dispatcher(worker)
+    if worker.active() != expected:
+        raise ValueError("Dispatcher changed during refresh preflight")
+    record(f"Prior dispatcher version: `{expected}`. Verified D1 marker `{staging}` and reviewed source `{base}`.")
+    deploy_worker(worker, config, worker_env, base, staging, previous=expected, rate_card=LUNA_RATE_CARD)
+    require_inert_dispatcher(worker)
+
+
 def initialize(env):
     base, account, staging, production, deploy, d1, runtime = settings(env)
     if subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip() != base:
@@ -225,12 +263,19 @@ def initialize(env):
         prepare(argparse.Namespace(database=staging, production_database=production, base=base, out=plan))
         validate_plan(plan, staging, base)
         workers = [StagingWorker(account, deploy, name) for name in (DATABASE, DISPATCH)]
-        require_unattached(workers[0])
+        refresh = env.get("STUDIO_REFRESH_DISPATCHER_VERSION", "")
+        recovery = env.get("STUDIO_RECOVER_DISPATCHER", "false")
+        if refresh and recovery != "false":
+            raise ValueError("Choose only one staging release mode")
+        if not refresh:
+            require_unattached(workers[0])
         verify_databases(StudioCloudflare(account, d1), staging, production)
         record(f"Reviewed SHA `{base}`; verified staging D1 `{staging}` and production D1 `{production}`.")
         d1_env = cli_env(env, account, d1, directory)
         worker_env = cli_env(env, account, deploy, directory)
-        recovery = env.get("STUDIO_RECOVER_DISPATCHER", "false")
+        if refresh:
+            refresh_dispatcher(workers[1], plan, d1_env, worker_env, staging, refresh, base)
+            return
         if recovery == "true":
             recover_dispatcher(workers, plan, d1_env, worker_env, base, staging, runtime)
             return

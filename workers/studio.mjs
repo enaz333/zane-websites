@@ -179,4 +179,6 @@ export function createStudio(authenticate) {
   };
 }
 
-export default createStudio(createAccessVerifier());
+export default createStudio(createAccessVerifier(fetch, stage => {
+  console.warn('studio_access_denied', stage);
+}));

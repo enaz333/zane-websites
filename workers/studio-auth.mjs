@@ -7,52 +7,92 @@ function bytes(part) {
   return Uint8Array.from(atob(part.replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0));
 }
 
-export function createAccessVerifier(fetchKeys = fetch) {
+export function createAccessVerifier(fetchKeys = fetch, reportFailure = () => {}) {
   let cache;
+  function deny(stage) {
+    // Pass only fixed stage names. Never pass the request, JWT, claims or exceptions.
+    reportFailure(stage);
+    return null;
+  }
+
   return async (request, env) => {
     const { ACCESS_TEAM_ORIGIN: issuer, ACCESS_AUD: audience, STUDIO_OWNER_EMAIL: owner,
       STUDIO_ORIGIN: origin } = env;
     if (!teamOrigin.test(issuer ?? '') || !audience || !owner ||
-        origin !== 'https://studio.zanegiordano.com' || new URL(request.url).origin !== origin) {
-      return null;
-    }
+        origin !== 'https://studio.zanegiordano.com') return deny('runtime_config');
+    if (new URL(request.url).origin !== origin) return deny('request_origin');
+
     const token = request.headers.get('Cf-Access-Jwt-Assertion');
-    if (!token || token.length > 8192) return null;
+    if (!token) return deny('assertion_missing');
+    if (token.length > 8192) return deny('assertion_size');
+
+    let header, claims, signedInput, signature;
     try {
       const parts = token.split('.');
-      if (parts.length !== 3) return null;
-      const [head, body, signature] = parts;
-      const { alg, kid } = JSON.parse(decoder.decode(bytes(head)));
-      const claims = JSON.parse(decoder.decode(bytes(body)));
-      const now = Math.floor(Date.now() / 1000);
-      if (alg !== 'RS256' || typeof kid !== 'string' || !kid ||
-          claims.iss !== issuer || claims.type !== 'app' ||
-          !Array.isArray(claims.aud) || !claims.aud.includes(audience) ||
-          !Number.isSafeInteger(claims.exp) || claims.exp <= now ||
-          (claims.nbf !== undefined && (!Number.isSafeInteger(claims.nbf) || claims.nbf > now)) ||
-          typeof claims.email !== 'string' || claims.email.toLowerCase() !== owner.toLowerCase() ||
-          typeof claims.sub !== 'string' || !claims.sub || claims.sub.length > 255) return null;
+      if (parts.length !== 3) return deny('jwt_format');
+      const [head, body, encodedSignature] = parts;
+      header = JSON.parse(decoder.decode(bytes(head)));
+      claims = JSON.parse(decoder.decode(bytes(body)));
+      signature = bytes(encodedSignature);
+      signedInput = new TextEncoder().encode(head + '.' + body);
+      if (!header || !claims || typeof header !== 'object' || typeof claims !== 'object') {
+        return deny('jwt_format');
+      }
+    } catch {
+      return deny('jwt_format');
+    }
 
-      if (cache?.issuer !== issuer || cache.until <= now) {
+    const { alg, kid } = header;
+    const now = Math.floor(Date.now() / 1000);
+    if (alg !== 'RS256' || typeof kid !== 'string' || !kid) return deny('jwt_header');
+    if (claims.iss !== issuer) return deny('issuer');
+    if (claims.type !== 'app') return deny('token_type');
+    if (!Array.isArray(claims.aud) || !claims.aud.includes(audience)) return deny('audience');
+    if (!Number.isSafeInteger(claims.exp) || claims.exp <= now ||
+        (claims.nbf !== undefined && (!Number.isSafeInteger(claims.nbf) || claims.nbf > now))) {
+      return deny('token_time');
+    }
+    if (typeof claims.email !== 'string' || claims.email.toLowerCase() !== owner.toLowerCase()) {
+      return deny('owner_email');
+    }
+    if (typeof claims.sub !== 'string' || !claims.sub || claims.sub.length > 255) {
+      return deny('subject');
+    }
+
+    if (cache?.issuer !== issuer || cache.until <= now) {
+      let keys;
+      try {
         const response = await fetchKeys(issuer + '/cdn-cgi/access/certs', {
           redirect: 'error', signal: AbortSignal.timeout(5000),
         });
-        if (!response.ok) return null;
-        const { keys } = await response.json();
-        if (!Array.isArray(keys)) return null;
-        // Store settled data only: Workers cannot share request-scoped I/O.
-        cache = { issuer, until: now + 60, keys };
+        if (!response.ok) return deny('jwks_fetch');
+        ({ keys } = await response.json());
+      } catch {
+        return deny('jwks_fetch');
       }
-      const jwk = cache.keys.find(key => key.kid === kid && key.kty === 'RSA' &&
-        (!key.alg || key.alg === 'RS256') && (!key.use || key.use === 'sig'));
-      if (!jwk) return null;
-      const key = await crypto.subtle.importKey('jwk', jwk,
-        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-      const verified = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, bytes(signature),
-        new TextEncoder().encode(head + '.' + body));
-      return verified ? issuer + '#' + claims.sub : null;
-    } catch {
-      return null;
+      if (!Array.isArray(keys)) return deny('jwks_format');
+      // Store settled data only: Workers cannot share request-scoped I/O.
+      cache = { issuer, until: now + 60, keys };
     }
+    const jwk = cache.keys.find(key => key?.kid === kid && key.kty === 'RSA' &&
+      (!key.alg || key.alg === 'RS256') && (!key.use || key.use === 'sig'));
+    if (!jwk) return deny('signing_key');
+
+    let key;
+    try {
+      key = await crypto.subtle.importKey('jwk', jwk,
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    } catch {
+      return deny('signing_key_import');
+    }
+
+    try {
+      if (await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, signedInput)) {
+        return issuer + '#' + claims.sub;
+      }
+    } catch {
+      // Verification errors and signature mismatches both fail closed.
+    }
+    return deny('signature');
   };
 }

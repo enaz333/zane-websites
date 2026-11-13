@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import time
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, build_opener
 
@@ -15,6 +16,8 @@ from release_studio import NoRedirect, SHA, UUID, StudioCloudflare, record, wran
 DISPATCH = "zane-studio-dispatch-staging"
 MIGRATIONS = {"0001_tasks.sql", "0002_execution.sql", "0003_dispatch.sql"}
 ACCESS = ("ACCESS_TEAM_ORIGIN", "ACCESS_AUD", "STUDIO_OWNER_EMAIL")
+RECOVERY_WEB_VERSION = "427e7aff-6a11-4ce0-a6b0-f3d89ff8f735"
+RECOVERY_WEB_SHA = "c8465075f889f7cb4db2e243f4ebac48d0ebcccf"
 
 
 def verify_owner_approval(env):
@@ -92,6 +95,32 @@ class StagingWorker(StudioCloudflare):
     def script(self, suffix, **kwargs):
         return self.get(f"/workers/scripts/{self.worker}/{suffix}", **kwargs)
 
+    def exists(self):
+        return self.script("settings", missing_worker=True) is not None
+
+    def active(self):
+        if not self.exists():
+            return None
+        deployments = self.script("deployments")["deployments"]
+        if not deployments:
+            return None
+        versions = deployments[0]["versions"]
+        if len(versions) != 1 or versions[0]["percentage"] != 100 or not UUID.fullmatch(versions[0]["version_id"]):
+            raise ValueError(f"{self.worker} has an unexpected traffic allocation")
+        return versions[0]["version_id"]
+
+
+def wait_for_version(worker, version):
+    for attempt in range(10):
+        active = worker.active()
+        if active == version:
+            return
+        if active is not None:
+            raise ValueError(f"{worker.worker} is serving a different version; inspect Deployments")
+        if attempt < 9:
+            time.sleep(2)
+    raise ValueError(f"{worker.worker} version {version} was uploaded but no active deployment became visible")
+
 
 def verify_databases(api, staging, production):
     for uuid, name in ((staging, DATABASE), (production, "zane-studio")):
@@ -116,6 +145,10 @@ def migrate(plan, env, staging):
     flags = ("DB", "--remote", "--config", str(plan / "web.json"))
     wrangler("d1", "migrations", "apply", *flags, env=env)
     wrangler("d1", "execute", *flags, "--file", str(plan / "marker.sql"), env=env)
+
+
+def verify_marker(plan, env, staging):
+    flags = ("DB", "--remote", "--config", str(plan / "web.json"))
     result = subprocess.check_output(
         ["npx", "--no-install", "wrangler", "d1", "execute", *flags, "--json",
          "--command", "SELECT staging_id FROM studio_dispatch_environment WHERE id = 1"],
@@ -141,10 +174,16 @@ def deploy_worker(worker, config, env, base, staging, runtime=None):
     if entry["worker_name"] != worker.worker or not UUID.fullmatch(version):
         raise ValueError("Unexpected Wrangler deployment result")
     record(f"{worker.worker}: uploaded version `{version}`.")
-    if worker.active() != version:
-        raise ValueError("Uploaded version is not the sole active version")
+    wait_for_version(worker, version)
+    verify_worker_version(worker, version, base, staging, runtime)
+    record(f"{worker.worker}: version `{version}` active at 100%; workers.dev and previews disabled.")
+
+
+def verify_worker_version(worker, version, base, staging, runtime=None):
     worker.require_private_endpoints()
     info = worker.script(f"versions/{version}")
+    if info.get("annotations", {}).get("workers/tag") != base:
+        raise ValueError("Worker version does not match the reviewed source tag")
     bindings = info["resources"]["bindings"]
     databases = [binding for binding in bindings if binding["type"] == "d1"]
     if (info["id"] != version or len(databases) != 1 or databases[0]["name"] != "DB"
@@ -153,7 +192,27 @@ def deploy_worker(worker, config, env, base, staging, runtime=None):
     secrets = {binding["name"] for binding in bindings if binding["type"] == "secret_text"}
     if secrets != (set(ACCESS) if runtime is not None else set()):
         raise ValueError("Deployed Worker has unexpected secret bindings")
-    record(f"{worker.worker}: version `{version}` active at 100%; workers.dev and previews disabled.")
+    expected_vars = ({"STUDIO_ORIGIN": ORIGIN, "STUDIO_QUEUE_ENABLED": "true"} if runtime is not None else
+                     {"STUDIO_STAGING_ID": staging, "STUDIO_BASE_SHA": base, "STUDIO_EXECUTION_ENABLED": "false",
+                      "STUDIO_RUN_MICROS": BUDGET, "STUDIO_MONTH_MICROS": BUDGET})
+    if {binding["name"]: binding["text"] for binding in bindings if binding["type"] == "plain_text"} != expected_vars:
+        raise ValueError("Deployed Worker has unexpected runtime variables")
+
+
+def recover_dispatcher(workers, plan, d1_env, worker_env, base, staging, runtime):
+    web, dispatcher = workers
+    if web.active() != RECOVERY_WEB_VERSION or dispatcher.exists():
+        raise ValueError("Recovery requires the recorded web version at 100% and an absent dispatcher")
+    verify_worker_version(web, RECOVERY_WEB_VERSION, RECOVERY_WEB_SHA, staging, runtime)
+    verify_marker(plan, d1_env, staging)
+    require_unattached(web)
+    if web.active() != RECOVERY_WEB_VERSION or dispatcher.exists():
+        raise ValueError("Staging changed during recovery preflight")
+    record(f"Verified staging marker `{staging}`; preserving web version `{RECOVERY_WEB_VERSION}` at 100%.")
+    deploy_worker(dispatcher, plan / "dispatcher.json", worker_env, base, staging)
+    require_unattached(web)
+    if web.active() != RECOVERY_WEB_VERSION:
+        raise ValueError("Web deployment changed during recovery")
 
 
 def initialize(env):
@@ -167,18 +226,24 @@ def initialize(env):
         validate_plan(plan, staging, base)
         workers = [StagingWorker(account, deploy, name) for name in (DATABASE, DISPATCH)]
         require_unattached(workers[0])
-        if any(worker.active() is not None for worker in workers):
-            raise ValueError("Initial deployment requires both staging Workers to be absent")
         verify_databases(StudioCloudflare(account, d1), staging, production)
         record(f"Reviewed SHA `{base}`; verified staging D1 `{staging}` and production D1 `{production}`.")
+        d1_env = cli_env(env, account, d1, directory)
+        worker_env = cli_env(env, account, deploy, directory)
+        recovery = env.get("STUDIO_RECOVER_DISPATCHER", "false")
+        if recovery == "true":
+            recover_dispatcher(workers, plan, d1_env, worker_env, base, staging, runtime)
+            return
+        if recovery != "false" or any(worker.exists() for worker in workers):
+            raise ValueError("Initial deployment requires both staging Workers to be absent")
         record("Prior staging Worker versions: none. On partial failure, keep the hostname unattached, "
                "retain staging D1 and the marker, and inspect recorded versions before any recovery.")
-        migrate(plan, cli_env(env, account, d1, directory), staging)
+        migrate(plan, d1_env, staging)
+        verify_marker(plan, d1_env, staging)
         record(f"Staging migrations 0001–0003 and marker `{staging}` verified.")
         require_unattached(workers[0])
-        if any(worker.active() is not None for worker in workers):
+        if any(worker.exists() for worker in workers):
             raise ValueError("Staging Workers appeared during migration")
-        worker_env = cli_env(env, account, deploy, directory)
         deploy_worker(workers[0], plan / "web.json", worker_env, base, staging, runtime)
         deploy_worker(workers[1], plan / "dispatcher.json", worker_env, base, staging)
         require_unattached(workers[0])

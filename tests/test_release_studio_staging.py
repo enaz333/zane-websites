@@ -66,9 +66,10 @@ class StudioStagingReleaseTests(unittest.TestCase):
               patch.object(release, "require_unattached"),
               patch.object(release, "verify_databases"),
               patch.object(release, "record"),
+              patch.object(release, "verify_marker"),
               patch.object(release, "migrate") as migrate,
               patch.object(release, "deploy_worker") as deploy):
-            worker.return_value.active.return_value = None
+            worker.return_value.exists.return_value = False
             release.initialize(ENV)
         d1_env = migrate.call_args.args[1]
         self.assertEqual(d1_env["CLOUDFLARE_API_TOKEN"], "d1-fixture")
@@ -80,6 +81,53 @@ class StudioStagingReleaseTests(unittest.TestCase):
             self.assertNotIn("ACCESS_AUD", worker_env)
         self.assertEqual(len(deploy.call_args_list[0].args), 6)
         self.assertEqual(len(deploy.call_args_list[1].args), 5)
+
+    def test_active_uses_api_order_and_handles_empty_history(self):
+        worker = release.StagingWorker("account", "token", release.DATABASE)
+        def deployment(version, percentage=100):
+            return {"versions": [{"version_id": version, "percentage": percentage}]}
+        with patch.object(worker, "script", side_effect=[{}, {"deployments": []}]):
+            self.assertIsNone(worker.active())
+        with patch.object(worker, "script", side_effect=[
+            {}, {"deployments": [deployment(release.RECOVERY_WEB_VERSION), deployment(STAGING)]},
+        ]):
+            self.assertEqual(worker.active(), release.RECOVERY_WEB_VERSION)
+        with patch.object(worker, "script", side_effect=[{}, {"deployments": [deployment(STAGING, 50)]}]):
+            with self.assertRaisesRegex(ValueError, "traffic allocation"):
+                worker.active()
+
+    def test_wait_retries_only_missing_deployment(self):
+        worker = Mock()
+        worker.active.side_effect = [None, release.RECOVERY_WEB_VERSION]
+        with patch.object(release.time, "sleep"):
+            release.wait_for_version(worker, release.RECOVERY_WEB_VERSION)
+        worker.active.side_effect = [STAGING]
+        with self.assertRaisesRegex(ValueError, "different version"):
+            release.wait_for_version(worker, release.RECOVERY_WEB_VERSION)
+
+    def test_recovery_deploys_only_dispatcher_after_marker_and_baseline(self):
+        web, dispatcher = Mock(), Mock()
+        web.active.return_value = release.RECOVERY_WEB_VERSION
+        dispatcher.exists.return_value = False
+        plan = Path("/tmp/plan")
+        with (patch.object(release, "verify_worker_version") as verify,
+              patch.object(release, "verify_marker") as marker,
+              patch.object(release, "require_unattached"),
+              patch.object(release, "record"),
+              patch.object(release, "deploy_worker") as deploy):
+            release.recover_dispatcher([web, dispatcher], plan, {}, {}, BASE, STAGING, {})
+            verify.assert_called_once_with(web, release.RECOVERY_WEB_VERSION, release.RECOVERY_WEB_SHA, STAGING, {})
+            marker.assert_called_once_with(plan, {}, STAGING)
+            deploy.assert_called_once_with(dispatcher, plan / "dispatcher.json", {}, BASE, STAGING)
+            deploy.reset_mock()
+            marker.side_effect = ValueError("marker mismatch")
+            with self.assertRaisesRegex(ValueError, "marker mismatch"):
+                release.recover_dispatcher([web, dispatcher], plan, {}, {}, BASE, STAGING, {})
+            deploy.assert_not_called()
+            dispatcher.exists.return_value = True
+            with self.assertRaisesRegex(ValueError, "absent dispatcher"):
+                release.recover_dispatcher([web, dispatcher], plan, {}, {}, BASE, STAGING, {})
+            deploy.assert_not_called()
 
     def test_wrong_database_uuid_or_name_is_rejected(self):
         for uuid in (STAGING, "invalid"):

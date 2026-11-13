@@ -90,7 +90,7 @@ def load(root=ROOT):
         raise ValueError("Registry keys must match sites/*/wrangler.json")
     domains = set()
     for slug, entry in projects.items():
-        if slug == "all" or not SLUG.fullmatch(slug) or not isinstance(entry, dict) or entry.keys() != FIELDS:
+        if slug == "all" or slug.startswith("stage-") or not SLUG.fullmatch(slug) or not isinstance(entry, dict) or entry.keys() != FIELDS:
             raise ValueError(f"Invalid project entry: {slug}")
         if type(entry["enabled"]) is not bool:
             raise ValueError(f"{slug}: enabled must be a boolean")
@@ -182,7 +182,7 @@ def affected(projects, before, after, root=ROOT):
 
 def scaffold(slug, root=ROOT):
     projects = load(root)
-    if not SLUG.fullmatch(slug) or slug in RESERVED_PATHS or slug in projects:
+    if not SLUG.fullmatch(slug) or slug.startswith("stage-") or slug in RESERVED_PATHS or slug in projects:
         raise ValueError(f"Invalid, reserved or existing slug: {slug}")
     if any(project["subdomain"] == slug for project in projects.values()):
         raise ValueError(f"Subdomain already in registry: {slug}")

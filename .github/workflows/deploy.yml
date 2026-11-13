@@ -91,13 +91,15 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci
+      - name: Validate staging plan without credentials
+        env:
+          WORKERS_DEV_SUBDOMAIN: ${{ vars.STAGING_WORKERS_DEV_SUBDOMAIN }}
+        run: python3 scripts/stage_workers.py --subdomain "$WORKERS_DEV_SUBDOMAIN" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --dry-run
       - name: Stage enabled projects
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.STAGING_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           WORKERS_DEV_SUBDOMAIN: ${{ vars.STAGING_WORKERS_DEV_SUBDOMAIN }}
-          PRODUCTION_ACCOUNT_ID: ${{ vars.PRODUCTION_ACCOUNT_ID }}
         run: |
-          [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ && "$PRODUCTION_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]]
-          [[ "$CLOUDFLARE_ACCOUNT_ID" != "$PRODUCTION_ACCOUNT_ID" && -n "$CLOUDFLARE_API_TOKEN" ]]
-          python3 scripts/stage_workers.py --subdomain "$WORKERS_DEV_SUBDOMAIN" --run-id "$GITHUB_RUN_ID"
+          [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ && -n "$CLOUDFLARE_API_TOKEN" ]]
+          python3 scripts/stage_workers.py --subdomain "$WORKERS_DEV_SUBDOMAIN" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"

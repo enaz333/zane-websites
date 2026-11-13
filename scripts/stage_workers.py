@@ -24,17 +24,53 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def staging_config(slug, names, origins):
-    config = json.loads((ROOT / config_path(slug)).read_text())
-    config.update(name=names[slug], workers_dev=True)
-    for binding in config.get("services", []):
-        binding["service"] = names[binding["service"].removeprefix("zane-")]
+STAGING_FIELDS = {"name", "main", "compatibility_date", "workers_dev", "preview_urls",
+                  "assets", "vars", "services"}
+ASSET_FIELDS = {"directory", "binding", "html_handling", "not_found_handling", "run_worker_first"}
+CLUB_ORIGINS = {"PERSONAL_ORIGIN": "personal", "ACL_ORIGIN": "acl",
+                "COACHELLA_ORIGIN": "coachella"}
+SITE_PREFIXES = {"acl": "/acl", "coachella": "/coachella", "photo-notes": "/PhotoNotes"}
+
+
+def staging_vars(slug, origins):
     if slug == "personal":
-        config.setdefault("vars", {})["STAGING_PROJECT_ORIGINS"] = origins
+        return {"STAGING_PROJECT_ORIGINS": origins}
     if slug == "club":
-        for var, target in (("PERSONAL_ORIGIN", "personal"), ("ACL_ORIGIN", "acl"),
-                            ("COACHELLA_ORIGIN", "coachella")):
-            config["vars"][var] = origins[target]
+        return {key: origins[target] for key, target in CLUB_ORIGINS.items()}
+    if slug in SITE_PREFIXES:
+        return {"SITE_PREFIX": SITE_PREFIXES[slug]}
+    return {}
+
+
+def validate_staging_config(slug, config, names, origins, prefix):
+    name = config.get("name")
+    if (name != names[slug] or name != prefix + slug or len(name) > 63
+            or not re.fullmatch(r"zane-stage-[0-9]{1,20}(?:-[0-9]{1,10})?-[a-z0-9-]+", name)):
+        raise ValueError(f"{slug}: unexpected staging Worker name")
+    if (config.keys() - STAGING_FIELDS or config["workers_dev"] is not True
+            or config["preview_urls"] is not False):
+        raise ValueError(f"{slug}: unexpected staging fields or preview settings")
+    assets = config["assets"]
+    if assets.keys() - ASSET_FIELDS or assets.get("directory") != "./public":
+        raise ValueError(f"{slug}: unexpected staging assets configuration")
+    if config.get("vars", {}) != staging_vars(slug, origins):
+        raise ValueError(f"{slug}: expected test-only variables")
+    allowed = set(names.values())
+    for binding in config.get("services", []):
+        if binding.keys() != {"binding", "service"} or binding["service"] not in allowed:
+            raise ValueError(f"{slug}: service binding must target a Worker from this staging run")
+
+
+def staging_config(slug, names, origins, prefix):
+    config = json.loads((ROOT / config_path(slug)).read_text())
+    config.update(name=names[slug], workers_dev=True, preview_urls=False)
+    for binding in config.get("services", []):
+        target = binding["service"].removeprefix("zane-")
+        if target not in names:
+            raise ValueError(f"{slug}: missing staging target for service binding")
+        binding["service"] = names[target]
+    config["vars"] = staging_vars(slug, origins)
+    validate_staging_config(slug, config, names, origins, prefix)
     return config
 
 
@@ -129,21 +165,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subdomain", required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--run-attempt", default="1")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", args.subdomain):
         parser.error("Provide only the account's workers.dev subdomain label")
     if not re.fullmatch(r"[0-9]{1,20}", args.run_id):
         parser.error("Provide a numeric GitHub run ID")
+    if not re.fullmatch(r"[0-9]{1,10}", args.run_attempt):
+        parser.error("Provide a numeric GitHub run attempt")
     projects = load()
     slugs = [slug for slug in ordered(projects) if projects[slug]["enabled"]]
-    names = {slug: f"zane-stage-{args.run_id}-{slug}" for slug in slugs}
+    prefix = f"zane-stage-{args.run_id}-{args.run_attempt}-"
+    names = {slug: prefix + slug for slug in slugs}
     if any(len(name) > 63 for name in names.values()):
         parser.error("A temporary Worker name exceeds 63 characters")
     origins = {slug: f"https://{name}.{args.subdomain}.workers.dev" for slug, name in names.items()}
+    # Validate the complete plan before any Worker is deployed.
+    configs = {slug: staging_config(slug, names, origins, prefix) for slug in slugs}
     with tempfile.TemporaryDirectory() as out:
         for slug in slugs:
-            config = staging_config(slug, names, origins)
+            config = configs[slug]
             parent = ROOT / config_path(slug).parent
             with tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix=".stage-", dir=parent) as file:
                 json.dump(config, file)

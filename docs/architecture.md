@@ -24,3 +24,5 @@ flowchart LR
 The personal Worker assembles directory links at runtime from the bundled registry. Photo Notes stays on the personal origin through a one-way service binding. Club owns BuildFest and retains archived copies while scoped redirects take precedence. Each festival owns its own assets. The personal signup backend is paused and its former POST path returns 503.
 
 See [projects](projects.md), [routing](routing.md), [decisions](decisions/README.md) and [historical migration notes](cloudflare.md).
+
+Staging, production and provisioning use separate protected GitHub environments in one Cloudflare account. Staging publishes uniquely named workers.dev Workers with test-only config. The shared account has weaker isolation than separate accounts because Workers write access may span production scripts. See [release automation](release-automation.md).

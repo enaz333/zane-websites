@@ -346,7 +346,7 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
   const source = '<h2 id="projects-title">A little of everything.</h2>';
   assert.throws(() => applyCopy(source, '<script>alert(1)</script>'));
   assert.throws(() => applyCopy('<p>Wrong file</p>', 'Selected projects'));
-  let modelCalls = 0, checks = 0, prs = 0, ref, draft;
+  let modelCalls = 0, checks = 0, prs = 0, branchWrites = 0, ref, draft;
   let smokePasses = false;
   const fetcher = async (url, options) => {
     const { hostname, pathname } = new URL(url);
@@ -374,7 +374,7 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
     assert.equal(hostname, 'api.github.com');
     if (pathname.includes('/contents/')) {
       const text = url.endsWith('?ref=' + commit) ? applyCopy(source, 'Selected projects') : source;
-      return Response.json({ type: 'file', encoding: 'base64', size: text.length, content: Buffer.from(text).toString('base64') });
+      return Response.json({ type: 'file', encoding: 'base64', size: Buffer.byteLength(text), content: Buffer.from(text).toString('base64') });
     }
     if (pathname.endsWith('/access_tokens')) {
       assert.deepEqual(body.repositories, ['zane-websites']);
@@ -397,7 +397,8 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
     if (pathname.endsWith('/git/refs')) {
       assert.equal(body.ref, 'refs/heads/studio/copy-' + task.id);
       ref = { object: { sha: body.sha } };
-      return Response.json(ref);
+      branchWrites++;
+      throw new Error('Reply lost after branch creation');
     }
     if (pathname.endsWith('/pulls') && !body) return Response.json(draft ? [draft] : []);
     if (pathname.endsWith('/pulls')) {
@@ -440,10 +441,18 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
   await step();
   assert.equal(checks, 1);
   await step();
+  assert.equal(branchWrites, 1);
+  assert.equal(prs, 0);
+  await step(); // The publication retry lock is still held.
+  assert.equal(prs, 0);
+  date.setUTCMinutes(10);
+  await step(); // Reclaim the lock and use the existing branch.
+  assert.equal(branchWrites, 1);
   assert.equal(prs, 1);
   assert.equal((await history(task.id)).status, 'validating');
-  date.setUTCMinutes(10);
+  date.setUTCMinutes(20);
   await step();
+  assert.equal(branchWrites, 1);
   assert.equal(prs, 1);
   assert.equal((await history(task.id)).pr_number, 321);
   assert.equal((await history(task.id)).check_summary, 'Repository checks passed');

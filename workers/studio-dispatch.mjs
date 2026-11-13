@@ -131,9 +131,9 @@ async function validate(env, run, fetcher, preflightSource) {
     headers: { Authorization: 'Bearer ' + env.STUDIO_CHECK_SECRET, 'Content-Type': 'application/json' },
     body: JSON.stringify({ base: run.base_sha, replacement: run.replacement }),
   });
-  if (!response.ok) throw new Error('Validator unavailable');
+  if (response.status !== 200) throw new Error('Validator unavailable');
   const result = await response.json();
-  if (result.base !== run.base_sha || typeof result.passed !== 'boolean') throw new Error('Invalid check result');
+  if (result?.base !== run.base_sha || typeof result.passed !== 'boolean') throw new Error('Invalid check result');
   if (result.passed) {
     const source = preflightSource ?? await sourceAt(run.base_sha, path, fetcher);
     if (result.digest !== await copyDigest(applyCopy(source, run.replacement))) throw new Error('Wrong checked artifact');
@@ -148,17 +148,33 @@ export async function tick(env, { fetcher = fetch, now = () => new Date() } = {}
     return;
   }
   const db = env.DB.withSession('first-primary');
-  const run = await acquire(db, env, now());
+  let run;
+  try {
+    run = await acquire(db, env, now());
+  } catch {
+    // The claim may have committed. The persisted lock fences the next tick.
+    console.warn('studio_dispatch_state', 'claim_unconfirmed');
+    return;
+  }
   if (!run) return;
   let phase = run.phase;
   try {
-    if (phase === 'model_sent') return await finish(db, run, now(), 'execution_failed');
+    if (phase === 'model_sent') {
+      console.warn('studio_dispatch_state', 'model_outcome_unknown');
+      return await finish(db, run, now(), 'execution_failed');
+    }
     if (run.deadline <= iso(now()) && phase !== 'publish') return await finish(db, run, now(), 'lease_expired');
     // After the publication window, only look for an existing draft.
     if (phase === 'publish') {
       const source = await sourceAt(run.base_sha, path, fetcher);
       const token = await appToken(env, fetcher);
-      const number = await publish(run, source, token, fetcher, { recoverOnly: run.deadline <= iso(now()) });
+      const number = await publish(run, source, token, fetcher, {
+        canPublish: () => {
+          const at = iso(now());
+          return at < run.deadline && at < run.lock_until;
+        },
+      });
+      if (!number && run.lock_until <= iso(now())) return;
       return await finish(db, run, now(), number ? null : 'lease_expired', number);
     }
     if (phase === 'prepare') {
@@ -178,12 +194,14 @@ export async function tick(env, { fetcher = fetch, now = () => new Date() } = {}
         return await finish(db, run, now(), 'checks_failed');
       }
       const time = now();
+      if (run.lock_until <= iso(time)) return;
       if (run.deadline <= iso(time)) return await finish(db, run, time, 'lease_expired');
       if (iso(time).slice(0, 7) !== run.month ||
           plus(time, 2).slice(0, 7) !== run.month) return await finish(db, run, time, 'execution_failed');
       // Persist before sending; an ambiguous or interrupted model call is never repeated.
       if (!await update(db, run, phase, "phase = 'model_sent'")) return;
       phase = 'model_sent';
+      if (run.lock_until <= iso(now())) return;
       const artifact = await propose(env, context, run, fetcher);
       applyCopy(context[path], artifact.replacement);
       await db.batch([
@@ -208,6 +226,9 @@ export async function tick(env, { fetcher = fetch, now = () => new Date() } = {}
       if (error instanceof PrepareFailure) console.warn('studio_dispatch_prepare', error.code, error.status);
       else console.warn('studio_dispatch_prepare', 'unexpected_prepare_failure');
     }
+    if (phase === 'publish') console.warn('studio_dispatch_state', 'publication_unconfirmed');
+    if (phase === 'check') console.warn('studio_dispatch_state', 'artifact_check_unconfirmed');
+    if (phase === 'model_sent') console.warn('studio_dispatch_state', 'model_or_artifact_unconfirmed');
     if (phase === 'model_sent' || (run.attempts >= 5 && phase !== 'publish')) {
       await finish(db, run, now(), 'execution_failed');
     } else {

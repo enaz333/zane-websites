@@ -25,6 +25,8 @@ test('prepare errors log fixed codes and leave the model unsent', async t => {
       ['http_error', () => new Response(payload, { status: 403 }), 403],
       ['http_error', () => new Response(payload, { status: 201 }), 201],
       ['invalid_response', () => new Response(payload), null],
+      ['invalid_response', () => Response.json(null), null],
+      ['invalid_response', () => Response.json({ type: 'file', encoding: 'base64', size: 4, content: 'dGVzdA==!' }), null],
     ]) {
       await t.test(stage + '_' + suffix + (status ?? ''), async sub => {
         const updates = [];

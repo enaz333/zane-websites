@@ -286,13 +286,14 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
   const { generateKeyPairSync } = await import('node:crypto');
   const { tick } = await import('../workers/studio-dispatch.mjs');
   const { publish } = await import('../workers/studio-publisher.mjs');
-  const { model, reservation } = await import('../workers/studio-provider.mjs');
+  const model = 'gpt-6-luna', reservation = 262548;
   const { applyCopy, copyDigest, path } = await import('../workers/studio-copy.mjs');
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const base = '1'.repeat(40), tree = '2'.repeat(40), commit = '3'.repeat(40);
   const env = { ...config, DB: db, STUDIO_EXECUTION_ENABLED: 'true', STUDIO_BASE_SHA: base,
     STUDIO_STAGING_ID: crypto.randomUUID(),
-    STUDIO_RATE_CARD: model + ':standard:0.40:1.60', STUDIO_MONTH_MICROS: String(reservation),
+    STUDIO_RATE_CARD: model + ':standard:0.10:0.01:0.125:0.50:0.20:0.02:0.25:0.75',
+    STUDIO_RUN_MICROS: String(reservation), STUDIO_MONTH_MICROS: String(reservation),
     STUDIO_CHECK_ORIGIN: 'https://example.run.app', STUDIO_CHECK_SECRET: 'a'.repeat(32),
     STUDIO_OPENAI_KEY: 'fixture', STUDIO_GITHUB_APP_ID: '1', STUDIO_GITHUB_INSTALLATION_ID: '2',
     STUDIO_GITHUB_PRIVATE_KEY: privateKey.export({ format: 'pem', type: 'pkcs8' }) };
@@ -320,7 +321,8 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
     if (hostname === 'api.openai.com') {
       modelCalls++;
       assert.deepEqual(body.tools, []);
-      assert.equal(body.max_output_tokens, 256);
+      assert.equal(body.max_output_tokens, 64);
+      assert.deepEqual(body.reasoning, { effort: 'none' });
       assert.match(body.input, /\.github\/workflows/);
       return Response.json({ model, status: 'completed', service_tier: 'default',
         usage: { input_tokens: 500, output_tokens: 20 },

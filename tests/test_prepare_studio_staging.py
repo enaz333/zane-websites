@@ -26,8 +26,8 @@ class StudioStagingTests(unittest.TestCase):
                 self.assertNotIn("routes", config)
                 self.assertNotIn("triggers", config)
             self.assertEqual(dispatch["vars"]["STUDIO_EXECUTION_ENABLED"], "false")
-            self.assertEqual(dispatch["vars"]["STUDIO_RUN_MICROS"], "419440")
-            self.assertEqual(dispatch["vars"]["STUDIO_MONTH_MICROS"], "419440")
+            self.assertEqual(dispatch["vars"]["STUDIO_RUN_MICROS"], "262548")
+            self.assertEqual(dispatch["vars"]["STUDIO_MONTH_MICROS"], "262548")
             self.assertNotIn("STUDIO_TEST_TASK_ID", dispatch["vars"])
             self.assertIn(args.database, (args.out / "marker.sql").read_text())
             args.database = args.production_database

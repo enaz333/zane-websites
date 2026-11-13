@@ -118,3 +118,16 @@ test('Club preserves mixed-case Photo Notes, deep links, gallery and www canonic
   assert.equal(www.headers.get('Location'), 'https://coolstrangersclub.com/PHOTO-NOTES/?card=1');
   assert.equal((await club.fetch(request('/photo-notes-unrelated'), env)).status, 404);
 });
+
+test('Personal gives an existing local directory a short URL and keeps unknown paths local', async () => {
+  const env = { ASSETS: { fetch(request) {
+    const url = new URL(request.url);
+    const found = url.pathname === '/new-page/index.html';
+    return new Response(request.method === 'HEAD' ? null : 'page', { status: found ? 200 : 404 });
+  } } };
+  const short = await personal.fetch(new Request('https://zanegiordano.com/new-page?q=a%2Bb'), env);
+  assert.equal(short.status, 302);
+  assert.equal(short.headers.get('Location'), 'https://zanegiordano.com/new-page/?q=a%2Bb');
+  assert.equal((await personal.fetch(new Request('https://zanegiordano.com/new-page/'), env)).status, 200);
+  assert.equal((await personal.fetch(new Request('https://zanegiordano.com/unknown-page'), env)).status, 404);
+});

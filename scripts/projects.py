@@ -112,6 +112,11 @@ def load(root=ROOT):
                 raise ValueError(f"{slug}: watch path must be an existing file under workers/")
         check_public_route(slug, entry)
         check_config(root, slug, entry)
+    personal_public = root / "sites/personal/public"
+    existing = {path.name.casefold() for path in personal_public.iterdir()}
+    for slug, project in projects.items():
+        if slug not in INTERNAL_ROUTES and project["short_path"].strip("/").casefold() in existing:
+            raise ValueError(f"{slug}: short path conflicts with personal assets")
     for slug in ordered(projects):
         if projects[slug]["enabled"]:
             for dependency in projects[slug]["depends_on"]:
@@ -181,6 +186,8 @@ def scaffold(slug, root=ROOT):
         raise ValueError(f"Invalid, reserved or existing slug: {slug}")
     if any(project["subdomain"] == slug for project in projects.values()):
         raise ValueError(f"Subdomain already in registry: {slug}")
+    if any(path.name.casefold() == slug for path in (root / "sites/personal/public").iterdir()):
+        raise ValueError(f"Short path conflicts with personal assets: {slug}")
     destination = root / "sites" / slug
     if destination.exists() or destination.is_symlink():
         raise ValueError(f"Path already exists: {destination}")

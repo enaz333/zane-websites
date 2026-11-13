@@ -9,6 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "https://studio-staging.zanegiordano.com"
 DATABASE = "zane-studio-staging"
 BUDGET = "262548"
+DISPATCH_OBSERVABILITY = {
+    "enabled": True,
+    "logs": {"enabled": True, "invocation_logs": False, "head_sampling_rate": 1},
+}
 DISPATCH_CONNECTION = {
     "STUDIO_CHECK_ORIGIN": "https://studio-validator-staging-7a3kki4cka-uc.a.run.app",
     "STUDIO_GITHUB_APP_ID": "5741231",
@@ -34,7 +38,7 @@ def prepare(args):
                vars={"STUDIO_ORIGIN": ORIGIN, "STUDIO_QUEUE_ENABLED": "true"})
     web["assets"]["directory"] = str(ROOT / "sites/studio/public")
     dispatcher = json.loads((ROOT / "sites/studio/executor/wrangler.json").read_text())
-    dispatcher.update(name="zane-studio-dispatch-staging",
+    dispatcher.update(name="zane-studio-dispatch-staging", observability=DISPATCH_OBSERVABILITY,
                       main=str(ROOT / "workers/studio-dispatch-worker.mjs"), d1_databases=binding,
                       vars={**DISPATCH_CONNECTION, "STUDIO_STAGING_ID": args.database, "STUDIO_BASE_SHA": args.base,
                             "STUDIO_EXECUTION_ENABLED": "false",

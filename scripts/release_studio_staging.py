@@ -10,7 +10,7 @@ import time
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, build_opener
 
-from prepare_studio_staging import BUDGET, DATABASE, DISPATCH_CONNECTION, ORIGIN, ROOT, prepare
+from prepare_studio_staging import BUDGET, DATABASE, DISPATCH_CONNECTION, DISPATCH_OBSERVABILITY, ORIGIN, ROOT, prepare
 from release_studio import NoRedirect, SHA, UUID, StudioCloudflare, record, wrangler
 
 DISPATCH = "zane-studio-dispatch-staging"
@@ -78,6 +78,7 @@ def validate_plan(plan, staging, base):
     dispatcher = common | {
         "name": DISPATCH, "main": str(ROOT / "workers/studio-dispatch-worker.mjs"),
         "compatibility_flags": ["nodejs_compat"],
+        "observability": DISPATCH_OBSERVABILITY,
         "vars": {**DISPATCH_CONNECTION, "STUDIO_STAGING_ID": staging, "STUDIO_BASE_SHA": base, "STUDIO_EXECUTION_ENABLED": "false",
                  "STUDIO_RUN_MICROS": BUDGET, "STUDIO_MONTH_MICROS": BUDGET},
     }

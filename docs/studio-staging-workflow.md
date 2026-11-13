@@ -54,3 +54,21 @@ approved dispatch. If it stops after an upload, inspect Cloudflare Deployments
 for both staging Workers and compare them with the summary before authorizing
 any manual recovery. Preserve D1 and its marker, keep the hostname unattached,
 and leave dispatch disabled. Unset the opt-in after initialization.
+
+## Recover the recorded partial initialization
+
+Cloudflare's rollout history shows web version
+`427e7aff-6a11-4ce0-a6b0-f3d89ff8f735` from
+`c8465075f889f7cb4db2e243f4ebac48d0ebcccf` automatically deployed at 100%.
+The dispatcher was never reached. No separate activation is needed.
+
+After this recovery change is reviewed and merged, verify the same web version
+is still at 100%, the dispatcher is absent, and the hostname remains
+unattached. Start a **fresh** Initialize Studio staging dispatch on protected
+main, enter the current reviewed main SHA, and select **recover_dispatcher**.
+Approve that run in **cloudflare-studio-staging** as the required owner.
+The workflow verifies the active web version, its source tag and bindings, and
+reads the existing marker before deploying only the missing disabled
+dispatcher. It does not rerun migrations, write the marker, or redeploy the web
+Worker. If any precondition fails, inspect the summary and stop; do not switch
+to initialization mode to bypass it.

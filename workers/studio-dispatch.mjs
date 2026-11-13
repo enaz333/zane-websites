@@ -9,12 +9,31 @@ const scope = "t.kind = 'edit' AND t.project = 'personal' AND (t.page IS NULL OR
 const plus = (date, minutes) => new Date(date.getTime() + minutes * 60_000).toISOString();
 const iso = date => date.toISOString();
 
+const validatorOrigin = 'https://studio-validator-staging-7a3kki4cka-uc.a.run.app';
+
+function configurationFailure(env) {
+  if (env.STUDIO_EXECUTION_ENABLED === 'false') return 'execution_disabled';
+  if (env.STUDIO_EXECUTION_ENABLED !== 'true') return 'invalid_execution_flag';
+  if (!uuid(env.STUDIO_STAGING_ID)) return 'invalid_staging_id';
+  if (!uuid(env.STUDIO_TEST_TASK_ID)) return 'invalid_task_id';
+  if (typeof env.DB?.withSession !== 'function') return 'missing_staging_database';
+  if (!budget(env)) return 'invalid_budget';
+  if (!sha(env.STUDIO_BASE_SHA)) return 'invalid_base_sha';
+  if (env.STUDIO_CHECK_ORIGIN !== validatorOrigin) return 'invalid_validator_origin';
+  if (typeof env.STUDIO_CHECK_SECRET !== 'string' || env.STUDIO_CHECK_SECRET.length < 32) {
+    return 'invalid_checker_secret';
+  }
+  if (typeof env.STUDIO_OPENAI_KEY !== 'string' || !env.STUDIO_OPENAI_KEY.trim()) return 'missing_model_key';
+  if (!/^\d+$/.test(env.STUDIO_GITHUB_APP_ID ?? '')) return 'invalid_app_id';
+  if (!/^\d+$/.test(env.STUDIO_GITHUB_INSTALLATION_ID ?? '')) return 'invalid_installation_id';
+  if (typeof env.STUDIO_GITHUB_PRIVATE_KEY !== 'string' || !env.STUDIO_GITHUB_PRIVATE_KEY.includes('PRIVATE KEY-----')) {
+    return 'invalid_app_key';
+  }
+  return null;
+}
+
 export function configured(env) {
-  return uuid(env.STUDIO_STAGING_ID) && uuid(env.STUDIO_TEST_TASK_ID) && env.STUDIO_EXECUTION_ENABLED === 'true' && env.DB && budget(env) &&
-    sha(env.STUDIO_BASE_SHA) && /^https:\/\/[a-z0-9-]+\.run\.app$/.test(env.STUDIO_CHECK_ORIGIN ?? '') &&
-    env.STUDIO_CHECK_SECRET?.length >= 32 && env.STUDIO_OPENAI_KEY &&
-    /^\d+$/.test(env.STUDIO_GITHUB_APP_ID ?? '') && /^\d+$/.test(env.STUDIO_GITHUB_INSTALLATION_ID ?? '') &&
-    env.STUDIO_GITHUB_PRIVATE_KEY?.includes('PRIVATE KEY-----');
+  return configurationFailure(env) === null;
 }
 
 export async function acquire(db, env, now) {
@@ -86,7 +105,11 @@ async function validate(env, run, fetcher) {
 }
 
 export async function tick(env, { fetcher = fetch, now = () => new Date() } = {}) {
-  if (!configured(env)) return;
+  const failure = configurationFailure(env);
+  if (failure) {
+    if (failure !== 'execution_disabled') console.warn('studio_dispatch_config', failure);
+    return;
+  }
   const db = env.DB.withSession('first-primary');
   const run = await acquire(db, env, now());
   if (!run) return;

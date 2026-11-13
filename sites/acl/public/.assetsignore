@@ -1,0 +1,14 @@
+.*
+*.csv
+*.tsv
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+private/
+secrets/
+subscriber-exports/
+exports/
+node_modules/
+dist/

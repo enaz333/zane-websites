@@ -1,0 +1,45 @@
+# Secrets and local deployment settings
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.kdbx
+*credentials*.json
+*service-account*.json
+secrets/
+private/
+config/staging.json
+config/production.json
+
+# Subscriber and private exports
+subscriber-exports/
+subscribers/
+exports/
+*.csv
+*.tsv
+*.sqlite
+*.sqlite3
+
+# Generated output and local tooling
+dist/
+build/
+node_modules/
+.wrangler/
+.netlify/
+coverage/
+__pycache__/
+*.py[cod]
+.DS_Store
+._*
+*.log
+*.zip
+!sites/club/public/buildfest/BuildFest_Support_Plugin.zip
+!sites/*/public/*/sample-exportify/Exportify_Test.zip

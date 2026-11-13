@@ -1,0 +1,7 @@
+# SOURCE TEMPLATE ONLY. scripts/prepare.py replaces this with your verified upstream.
+/photonotes /PhotoNotes 302
+/photonotes/ /PhotoNotes 302
+/photo-notes /PhotoNotes 302
+/photo-notes/ /PhotoNotes 302
+/PhotoNotes https://photo-notes-not-configured.invalid/PhotoNotes/ 200
+/PhotoNotes/* https://photo-notes-not-configured.invalid/PhotoNotes/:splat 200

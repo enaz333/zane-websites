@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#10130f" />
+  <title>My Custom Coachella 2027 Lineup</title>
+  <link rel="stylesheet" href="../acl/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>My Custom Coachella 2027 Lineup <span class="creator-credit">- Created by: Zane Giordano</span></h1>
+    </div>
+    <div class="top-actions">
+      <button id="syncButton" class="secondary" type="button">Refresh Spotify</button>
+      <button id="settingsButton" class="icon-button" type="button" aria-label="Open settings">⚙︎</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="setupCard" class="setup-card">
+      <div class="setup-copy">
+        <h2>Find your Coachella artists with Spotify</h2>
+      </div>
+      <div class="setup-actions">
+        <button id="importButton" class="import-button" type="button">Import with Exportify</button>
+      </div>
+      <p id="statusText" class="status" role="status"></p>
+    </section>
+
+    <section class="controls-card">
+      <div class="segmented day-selector" id="daySelector" aria-label="Choose day" role="group">
+        <button data-day="friday" type="button">Friday</button>
+        <button data-day="saturday" type="button">Saturday</button>
+        <button data-day="sunday" type="button">Sunday</button>
+        <button data-day="all" class="active" aria-pressed="true" type="button">All 3 days</button>
+      </div>
+    </section>
+
+    <section class="legend-card" aria-label="Heatmap legend">
+      <div class="legend-scale relative-legend" aria-hidden="true">
+        <span>Fewer saved songs</span>
+        <span class="heat-chip h1"></span>
+        <span class="heat-chip h2"></span>
+        <span class="heat-chip h3"></span>
+        <span class="heat-chip h4"></span>
+        <span class="heat-chip h5"></span>
+        <span>More saved songs</span>
+      </div>
+      <p class="schedule-tip">Tap any artist for saved songs or tracks to try.</p>
+    </section>
+    <section id="scheduleArea" class="schedule-area" aria-live="polite"></section>
+    <section id="recommendations" class="recommendations" aria-labelledby="recommendationsTitle" hidden>
+      <h2 id="recommendationsTitle">Recommendations based on your listening history</h2>
+      <p>Explore lineup artists you haven’t saved. Tap a name for two tracks to try.</p>
+      <div id="recommendationList" class="recommendation-list"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Exportify imports stay in your browser.</p>
+  </footer>
+
+  <dialog id="donationDialog" class="donation-dialog" aria-labelledby="donationTitle">
+    <div class="donation-content">
+      <p class="eyebrow">Before continuing</p>
+      <h2 id="donationTitle">To use this app - please donate $5 to one of the following causes</h2>
+      <div class="donation-links">
+        <a class="donation-link" href="/coachella/donate/haam/" target="_blank" rel="noopener">HAAM - Health Insurance for Austin Musicians <span aria-hidden="true">↗</span></a>
+        <a class="donation-link" href="/coachella/donate/gaza/" target="_blank" rel="noopener">Gaza Soup Kitchen <span aria-hidden="true">↗</span></a>
+        <a class="donation-link" href="/coachella/donate/artsakh/" target="_blank" rel="noopener">Support Armenians displaced from Artsakh <span aria-hidden="true">↗</span></a>
+      </div>
+      <button id="donationContinue" class="donation-continue" type="button">I donated - let's build a custom Coachella lineup</button>
+      <p class="donation-note">Donation links open in a new tab.</p>
+    </div>
+  </dialog>
+
+  <dialog id="importDialog" class="import-dialog" aria-labelledby="importTitle">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">Works for anyone</p>
+        <h2 id="importTitle">Import with Exportify</h2>
+      </div>
+      <button id="importClose" class="icon-button" aria-label="Close import">×</button>
+    </div>
+    <div class="import-body">
+      <div class="quick-import-intro">
+        <p>Three quick steps.</p>
+      </div>
+
+      <div class="visual-import-steps">
+        <section class="visual-step compact-step">
+          <div class="visual-step-head"><span class="step-number">1</span><h3>Go to Exportify and log in with Spotify</h3></div>
+          <a id="openExportify" class="exportify-link" href="https://exportify.app/" target="_blank" rel="noopener">Open Exportify ↗</a>
+        </section>
+
+        <section class="visual-step">
+          <div class="visual-step-head"><span class="step-number">2</span><h3>Tap <strong>Export All</strong> - wait for the download and then come back to this tab</h3></div>
+          <img class="import-guide-image" src="../acl/assets/exportify-export-all.jpg" alt="Exportify screen showing where the Export All button is located" />
+        </section>
+
+        <section class="visual-step">
+          <div class="visual-step-head"><span class="step-number">3</span><h3>Upload the ZIP</h3></div>
+          <label id="dropZone" class="drop-zone" for="importFileInput">
+            <strong id="dropZoneTitle">Tap here to upload</strong>
+            <span id="dropZoneSubtitle">Choose spotify_playlists.zip</span>
+            <input id="importFileInput" type="file" accept=".zip,.csv,application/zip,text/csv" multiple />
+          </label>
+          <p class="step-caption upload-caption">Tap box above to upload — select <strong>spotify_playlists.zip</strong>.</p>
+          <img class="import-guide-image" src="../acl/assets/select-spotify-playlists.png" alt="iPhone Files picker showing spotify_playlists.zip selected" />
+          <div id="importProgress" class="import-progress" aria-live="polite" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <div><strong id="importProgressTitle">Importing your music…</strong><span id="importProgressDetail">Reading your files locally.</span></div>
+          </div>
+          <p class="privacy-note">Processed on your device. Nothing is uploaded.</p>
+        </section>
+      </div>
+
+      <div id="importResult" class="import-result" role="status"></div>
+      <div class="import-actions">
+        <button id="useSampleImport" class="secondary" type="button">Test with sample</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="artistDialog" class="artist-dialog" aria-labelledby="artistName">
+    <div class="dialog-head">
+      <div>
+        <p id="artistMeta" class="eyebrow"></p>
+        <h2 id="artistName"></h2>
+      </div>
+      <button id="artistClose" class="icon-button" aria-label="Close artist details">×</button>
+    </div>
+    <p id="artistCount" class="artist-count"></p>
+    <div id="songList" class="song-list"></div>
+  </dialog>
+
+
+  <dialog id="imageSaveDialog" class="image-save-dialog" aria-labelledby="imageSaveTitle">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">Save to Photos</p>
+        <h2 id="imageSaveTitle">Save your lineup</h2>
+      </div>
+      <button id="imageSaveClose" class="icon-button" aria-label="Close image preview">×</button>
+    </div>
+    <div class="image-save-body">
+      <p>Press and hold the image, then choose <strong>Save to Photos</strong> or <strong>Save Image</strong>.</p>
+      <img id="imageSavePreview" alt="Personalized Coachella lineup ready to save" />
+    </div>
+  </dialog>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">Local test setup</p>
+        <h2>Settings</h2>
+      </div>
+      <button id="settingsClose" class="icon-button" aria-label="Close settings">×</button>
+    </div>
+
+    <section class="settings-section">
+      <h3>What counts toward an artist?</h3>
+      <p>A song is counted once even if it appears in multiple enabled sources.</p>
+      <label class="toggle-row"><span><strong>Liked Songs</strong><small>Tracks saved directly to Your Library.</small></span><input id="sourceLiked" type="checkbox" /></label>
+      <label class="toggle-row"><span><strong>My / personal playlists</strong><small>With Exportify, these are playlist files where your inferred Spotify user ID appears in the Added By column.</small></span><input id="sourceOwned" type="checkbox" /></label>
+      <label class="toggle-row"><span><strong>Shared / collaborative playlists</strong><small>Direct Spotify can identify these explicitly. In Exportify mode, personal/shared playlist files are grouped together because the CSV does not expose ownership.</small></span><input id="sourceCollaborative" type="checkbox" /></label>
+      <label class="toggle-row"><span><strong>Followed / other playlists</strong><small>Off by default. Turn this on only if you intentionally want large playlists you follow to influence the heatmap.</small></span><input id="sourceExternal" type="checkbox" /></label>
+      <label class="toggle-row"><span><strong>Exclude playlists with “Coachella” in the name</strong><small>On by default, so a Coachella planning playlist does not boost artists just because you added them for the festival.</small></span><input id="excludeCoachellaPlaylists" type="checkbox" /></label>
+      <label class="toggle-row"><span><strong>Saved albums</strong><small>Available with direct Spotify. Exportify’s saved album list contains album details only.</small></span><input id="sourceAlbums" type="checkbox" /></label>
+      <p id="sourceModeNote" class="help"></p>
+    </section>
+
+    <section class="settings-section">
+      <h3>Import music</h3>
+      <p>Use Exportify to create a local ZIP, then import it here.</p>
+      <div class="button-row">
+        <button id="settingsImport" class="import-button" type="button">Import Exportify data</button>
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <h3>Testing tools</h3>
+      <div class="button-row">
+        <button id="settingsDemo" class="secondary" type="button">Load demo data</button>
+        <button id="clearDataButton" class="secondary danger" type="button">Clear local data</button>
+      </div>
+      <p id="cacheInfo" class="help"></p>
+    </section>
+
+    <section class="settings-section private-spotify-section">
+      <h3>Locked features</h3>
+      <button id="unlockSpotifyButton" class="secondary" type="button">Locked features</button>
+      <div id="directSpotifyPanel" class="direct-spotify-panel hidden">
+        <label class="field-label" for="clientIdInput">Spotify Client ID</label>
+        <input id="clientIdInput" class="text-input" type="text" autocomplete="off" spellcheck="false" placeholder="Paste your Client ID here" />
+        <p class="help">Add this exact redirect URI in your Spotify app settings: <code id="spotifyRedirectUri"></code></p>
+        <div class="button-row">
+          <button id="settingsConnect" class="spotify-button" type="button">Connect Spotify</button>
+          <button id="disconnectButton" class="secondary" type="button">Disconnect</button>
+        </div>
+      </div>
+    </section>
+  </dialog>
+
+  <dialog id="passwordDialog" class="password-dialog" aria-labelledby="passwordTitle">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">Restricted</p>
+        <h2 id="passwordTitle">Enter password</h2>
+      </div>
+      <button id="passwordClose" class="icon-button" aria-label="Close password prompt">×</button>
+    </div>
+    <div class="password-body">
+      <label class="field-label" for="spotifyPasswordInput">Password</label>
+      <input id="spotifyPasswordInput" class="text-input" type="password" autocomplete="off" placeholder="Password" />
+      <p id="passwordError" class="password-error" role="alert"></p>
+      <button id="passwordSubmit" class="spotify-button password-submit" type="button">Unlock</button>
+    </div>
+  </dialog>
+
+  <template id="scheduleTemplate">
+    <article class="schedule-card">
+      <div class="schedule-card-head">
+        <div>
+          <p class="schedule-kicker"></p>
+          <h2 class="schedule-title"></h2>
+        </div>
+        <button class="download-button secondary" type="button">Save / Share</button>
+      </div>
+      <div class="schedule-shell">
+        <img class="schedule-image" alt="Coachella lineup" />
+        <div class="overlay-layer"></div>
+      </div>
+      <details class="artist-directory"><summary>Browse artists</summary><div class="artist-directory-list"></div></details>
+    </article>
+  </template>
+
+  <script src="lineup-data.js"></script>
+  <script src="artist-catalog.js"></script>
+  <script src="taste-data.js"></script>
+  <script src="app.js"></script>
+  <!-- Cloudflare Web Analytics -->
+  <!-- End Cloudflare Web Analytics -->
+</body>
+</html>

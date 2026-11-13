@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cool Strangers Club</title>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'EB Garamond', serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+      background-color: #fff;
+      color: #111;
+    }
+    h1 {
+      font-size: 3.5rem;
+      margin-bottom: 0.2rem;
+      text-align: center;
+    }
+    p.subtitle {
+      font-size: 1.25rem;
+      margin-bottom: 1.25rem;
+      margin-top: 0.25rem;
+      text-align: center;
+    }
+    .accordion {
+      width: 100%;
+      max-width: 600px;
+      margin: 0.5rem 0;
+      transition: all 0.3s ease;
+    }
+    .accordion.open { background-color: #f5f5f5; }
+    .accordion-header {
+      padding: 1rem;
+      font-size: 1.25rem;
+      font-weight: normal;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      transition: background 0.3s;
+    }
+    .accordion-header::after {
+      content: '+';
+      position: absolute;
+      right: 1rem;
+      font-size: 1.5rem;
+      transition: transform 0.4s ease;
+    }
+    .accordion.open .accordion-header::after {
+      transform: rotate(45deg);
+    }
+    .accordion-header:hover {
+      background-color: #f9f9f9;
+    }
+    .accordion-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, padding 0.4s ease;
+      padding: 0 1rem;
+      font-size: 1rem;
+      text-align: center;
+    }
+    .accordion.open .accordion-content {
+      max-height: 1000px;
+      padding: 0.25rem 1rem 1rem;
+    }
+    .accordion-content p strong {
+      display: block;
+      font-size: 1.15rem;
+      margin-top: 1rem;
+    }
+    .accordion-content p strong + br { display: none; }
+    .register-box {
+      margin-top: 2rem;
+      padding: 1rem 2rem;
+      border: 2px solid #111;
+      cursor: pointer;
+      transition: background 0.3s, color 0.3s;
+      font-size: 1rem;
+      text-align: center;
+    }
+    .register-box:hover {
+      background-color: #111;
+      color: #fff;
+    }
+    .project-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem 1.5rem;
+      margin-top: 2rem;
+    }
+    .project-links a {
+      color: inherit;
+      text-underline-offset: 0.2em;
+    }
+    @media (max-width: 480px) {
+      h1 {
+        font-size: 2rem;
+        white-space: nowrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <p class="subtitle"> </p>
+  <h1>Cool Strangers Club</h1>
+  <p class="subtitle"> </p>
+
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">Why was I given this card?</div>
+    <div class="accordion-content">
+      <p>It's quite simple. You were handed this card because someone in Cool Strangers Club thought you were cool.</p>
+      <p>They wanted you to join this invite-only community of people who like to do fun stuff together. Registering gives us the opportunity to invite you to the curated experiences that we host all around Austin.</p>
+      <p>Some events are loud, some are chill, some are thoughtful, and some are active. But every event has a curated group of attendees and an activity designed specifically to bring you all together.</p>
+    </div>
+  </div>
+
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">What does it cost?</div>
+    <div class="accordion-content">
+      <p>Membership is completely, absolutely, 100% FREE.</p>
+      <p>Cool Strangers Club is not a business and there is no revenue model at all. This is entirely run by volunteers who have “real” jobs and just think this is a fun thing to do.</p>
+      <p>That said, some events will have a cost associated with them. For example if we are going to a restaurant or seeing a show together, we will ask you to cover your own cost to attend. We will always be upfront about the costs before you agree to something.</p>
+      <p>It's important to note that you will never HAVE to spend any money at all to be a part of this community.</p>
+    </div>
+  </div>
+
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">How does it work?</div>
+    <div class="accordion-content">
+      <p><strong>Step 1: Registration</strong> Once you have received an invitation, register for the Cool Strangers Club using the link below. There are questions to get to know you and figure out which kinds of events you would be most interested in. Don't overthink it.</p>
+      <p><strong>Step 2: Wait for an invitation</strong> There is no schedule for our events. Just keep an eye on your inbox and you will eventually be sent an invitation to an event we think you would enjoy based off your answers to the registration questions!</p>
+      <p><strong>Step 3: Attend</strong> Matching with an event may take some time, but that's part of the excitement! Once matched, you'll receive an email with event details and bios of the other "Cool Strangers" invited. Simply RSVP and join the fun!</p>
+      <p><strong>Step 4: Join the community!</strong> Attend more events! Host an event! Get your own invite cards! Meet up with the people you meet outside of a scheduled gathering!</p>
+      <p>At the end of the day, Cool Strangers Club is all about building friendships. As you attend more and more events, you will become more integrated with this amazing community of people from all over the city.</p>
+    </div>
+  </div>
+
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">Who is behind this?</div>
+    <div class="accordion-content">
+      <p>This project was started by a friend group who grew up in Austin together. After graduating college, we just wanted to meet some new people but making friends with strangers is really hard. So now we host cool events to make that process easier.</p>
+      <p>If you want some confirmation that we are not weird or scary people. Feel free to reach out to Zane on instagram <a href="https://www.instagram.com/zane_giordano/" target="_blank">@Zane_Giordano</a> or email us directly at <a href="mailto:coolstrangersclub@gmail.com">coolstrangersclub@gmail.com</a>.</p>
+    </div>
+  </div>
+
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">Rules / Community Values</div>
+    <div class="accordion-content">
+      <p><strong>Always show up with intention</strong> You will get out of these experiences what you put in. If you are not in a place to show up fully to an event, just wait until the next one.</p>
+      <p><strong>Always look to include people</strong> The person you know the least, is the person you should go talk to next.</p>
+      <p><strong>Don't be a dick</strong> You don't have to agree with everyone you meet here. But you are required to be nice to them.</p>
+      <p><strong>Don't be creepy</strong> We have zero tolerance for making people uncomfortable.</p>
+      <p><strong>All Feedback is appreciated</strong> Any concerns or suggestions can be sent directly to <a href="mailto:coolstrangersclub@gmail.com">coolstrangersclub@gmail.com</a></p>
+    </div>
+  </div>
+
+  <div class="register-box" onclick="window.location.href='https://forms.gle/QemuZmv9eEhDkomCA'">
+    Register here with your invite code
+  </div>
+
+  <nav class="project-links" aria-label="Cool Strangers Club projects">
+    <a href="/coachella/">My Custom Coachella 2027 Lineup</a>
+    <a href="/acl/">ACL Schedule Creator</a>
+    <a href="/photo-notes/">Photo Notes</a>
+    <a href="/buildfest/">BuildFest</a>
+  </nav>
+
+  <script>
+    function toggleAccordion(header) {
+      const accordion = header.parentElement;
+      accordion.classList.toggle('open');
+    }
+  </script>
+</body>
+</html>

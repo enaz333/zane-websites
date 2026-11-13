@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="One photo, two copies. Your copy includes a personal note and will never be given to anyone else." />
+  <title>Photo Notes — This photo is yours.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    :root { --blue: #426aa0; --blue-soft: #f3f7fc; --blue-line: #dce7f3; --gold: #f3d778; color-scheme: light; color: #303a35; background: #fff; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+    body { margin: 0; }
+    header { max-width: 1040px; margin: auto; padding: 26px 36px 0; text-align: center; }
+    .brand { display: inline-block; font-size: 32px; line-height: 1; font-weight: 600; color: var(--blue); }
+    main { max-width: 1040px; margin: auto; padding: 42px 36px 48px; }
+    .hand { font-family: 'Caveat', 'Segoe Print', cursive; }
+    .hero { text-align: center; }
+    h1 { font-size: clamp(62px, 8.5vw, 96px); line-height: 1.08; font-weight: 500; letter-spacing: -.035em; margin: 0 0 25px; }
+    h1 span { position: relative; z-index: 0; white-space: nowrap; }
+    h1 span::after { content: ''; position: absolute; z-index: -1; left: 3%; right: 0; bottom: .1em; height: .12em; border-radius: 55% 35% 45% 30%; background: var(--gold); transform: rotate(-2deg); }
+    .intro { max-width: 545px; margin: auto; font-size: 16px; line-height: 1.85; color: #606660; text-wrap: pretty; }
+    figure { margin: 53px 0 0; padding: 40px 34px 42px; background: var(--blue-soft); border: 1px solid var(--blue-line); border-radius: 24px; }
+    figcaption { text-align: center; font-size: 29px; line-height: 1.25; }
+    .diagram { display: grid; grid-template-columns: 1fr 1.12fr 1.12fr 1fr; align-items: center; gap: 5px; margin-top: 24px; }
+    .annotation { position: relative; }
+    .annotation h2 { font-size: 28px; line-height: 1.2; font-weight: 500; margin: 0 0 9px; }
+    .annotation p { color: #606660; font-size: 14px; line-height: 1.8; margin: 0; max-width: 185px; }
+    .mine { padding-right: 14px; }
+    .yours { padding-left: 19px; }
+    svg { fill: none; stroke: #535a53; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .mine h2 { color: var(--blue); }
+    .yours h2 { color: var(--blue); }
+    .arrow { stroke: #747a74; }
+    .photo { display: block; width: 100%; height: auto; }
+    .photo text { stroke: none; fill: #414b43; font-family: 'Caveat', 'Segoe Print', cursive; }
+    .arrow { position: absolute; width: 88px; height: 48px; }
+    .mine .arrow { top: -51px; right: -10px; transform: rotate(12deg); }
+    .yours .arrow { bottom: -50px; left: -8px; transform: rotate(190deg); }
+    .about { max-width: 640px; text-align: center; margin: 46px auto 0; padding: 36px 46px 38px; border: 1px solid var(--blue-line); border-radius: 22px; background: var(--blue-soft); }
+    .about h2 { color: var(--blue); font-size: 32px; font-weight: 500; line-height: 1.2; margin: 0 0 15px; }
+    .about-copy { font-size: 15px; line-height: 1.85; color: #606660; margin: 0; text-wrap: pretty; }
+    .signoff { color: var(--blue); font-size: 29px; line-height: 1.25; margin: 28px auto 0; text-align: center; }
+    .signoff span { display: block; margin-top: 7px; }
+    @media (max-width: 700px) {
+      header { max-width: 480px; padding: 23px 23px 0; }
+      .brand { font-size: 29px; }
+      main { padding: 35px 23px 38px; max-width: 480px; }
+      h1 { font-size: clamp(58px, 12.5vw, 76px); max-width: 370px; margin: 0 auto 23px; }
+      .intro { font-size: 15px; line-height: 1.8; }
+      figure { margin-top: 36px; padding: 30px 18px 34px; border-radius: 18px; }
+      figcaption { font-size: 26px; max-width: 285px; margin: auto; }
+      .diagram { grid-template-columns: 1fr 1fr; column-gap: 15px; row-gap: 13px; margin-top: 20px; }
+      .photo-mine { grid-column: 1; grid-row: 1; }
+      .photo-yours { grid-column: 2; grid-row: 1; }
+      .mine { grid-column: 1; grid-row: 2; padding: 0 0 0 3px; }
+      .yours { grid-column: 2; grid-row: 2; padding: 0 0 0 3px; }
+      .annotation { align-self: start; padding-top: 27px; }
+      .annotation h2 { font-size: 26px; margin-bottom: 7px; }
+      .annotation p { font-size: 13px; line-height: 1.7; }
+      .mine .arrow, .yours .arrow { width: 44px; height: 30px; top: -8px; bottom: auto; right: auto; left: 25px; transform: rotate(-76deg); }
+      .about { margin-top: 34px; padding: 30px 23px 32px; border-radius: 18px; }
+      .about h2 { font-size: 29px; }
+      .about-copy { font-size: 14px; }
+      .signoff { font-size: 27px; margin-top: 23px; }
+    }
+  </style>
+</head>
+<body>
+  <header><span class="brand hand">Zane’s photo notes</span></header>
+  <main>
+    <section class="hero" aria-labelledby="welcome">
+      <h1 class="hand" id="welcome">This photo is <span>yours.</span></h1>
+      <p class="intro">You’re the only person that will ever be given this photo. I wrote a note on the back just for you, and I keep a second copy with your name on it as a reminder of who it belongs to.</p>
+    </section>
+    <figure aria-labelledby="two-copies">
+      <figcaption class="hand" id="two-copies">One photo, two copies.</figcaption>
+      <div class="diagram">
+        <div class="annotation mine">
+          <svg class="arrow" viewBox="0 0 90 48" aria-hidden="true"><path d="M5 37C13 12 48 7 80 20M69 10l12 11-16 4"/><path d="M8 35C20 15 44 12 70 18" opacity=".22"/></svg>
+          <h2 class="hand">My copy</h2>
+          <p>I write your name on it and keep it in my binder, so I remember who this photo belongs to.</p>
+        </div>
+        <svg class="photo photo-mine" viewBox="0 0 240 238" role="img" aria-label="The back of the print I keep, with your name handwritten on it">
+          <g transform="rotate(-7 120 119)">
+            <path fill="white" d="M22 40Q117 38 217 42L216 197Q115 195 21 199Q23 120 22 40Z"/>
+            <path d="M25 43Q114 41 213 44M213 46l1 147M24 195q96-3 187 0" opacity=".25" stroke-width=".8"/>
+            <text x="120" y="125" text-anchor="middle" font-size="33">your name</text>
+            <path d="M60 138q53-3 120 0m-117 3q60-3 108-1" stroke-width=".9" opacity=".5"/>
+          </g>
+        </svg>
+        <svg class="photo photo-yours" viewBox="0 0 240 238" role="img" aria-label="The back of your print, with a personal handwritten note">
+          <g transform="rotate(6 120 119)">
+            <path fill="white" d="M22 40Q112 42 217 39L218 198Q115 196 22 199Q24 122 22 40Z"/>
+            <path d="M26 43q95 2 187-1m1 2 1 150M26 195l185 1" opacity=".25" stroke-width=".8"/>
+            <text x="43" y="82" font-size="23">a note, just for you</text>
+            <path d="M44 105q6-8 9-1t8-2q3-7 6 1t10 0q3-6 7 0t12 0m8 0q6-7 9-1t9 0q4-8 7 0t13-1m8 0q6-6 9 0t12 0q5-7 8 0t12-2M43 122q7-6 10 0t9-1q5-6 8 0t13 0m7 0q5-7 9 0t10-1q5-6 9 0t12 0m8-1q5-6 9 1t11-1q5-7 8 0t12 0M44 139q5-7 8-1t11 1q4-8 8-1t13 0m8 0q6-7 10-1t12 0q6-7 9 0t10-1m9 1q4-7 8-1t11 0" stroke-width="1.15" opacity=".75"/>
+            <path d="M53 173c-22-12-11-25-2-13 10-15 23-3 2 13m1-2c-13-7-15-14-12-16" stroke-width="1.3"/>
+            <text x="130" y="177" font-size="24">— Zane</text>
+          </g>
+        </svg>
+        <div class="annotation yours">
+          <h2 class="hand">Your copy</h2>
+          <p>On the back of the photo is a personal note written just for you.</p>
+          <svg class="arrow" viewBox="0 0 90 48" aria-hidden="true"><path d="M5 37C13 12 48 7 80 20M69 10l12 11-16 4"/><path d="M8 35C20 15 44 12 70 18" opacity=".22"/></svg>
+        </div>
+      </div>
+    </figure>
+    <section class="about" aria-labelledby="about-title">
+      <h2 class="hand" id="about-title">About this project</h2>
+      <p class="about-copy">I love taking photos, but I never really knew what to do with them. Posting on Instagram felt unfulfilling—a photo gets a few seconds of attention, then disappears into the feed.<br /><br />I choose to give them as gifts instead. I’d rather have a photo cherished by one person than scrolled past by fifty.<br /><br />Now that you’ve been given this photo, it belongs to you (and only you) forever.</p>
+    </section>
+    <p class="signoff hand">I hope you enjoy it.<span>— Zane</span></p>
+  </main>
+</body>
+</html>

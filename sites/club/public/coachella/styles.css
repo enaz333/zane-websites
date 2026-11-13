@@ -1,0 +1,122 @@
+:root {
+  --heat: 94, 189, 255;
+  --lineup-blue: #124f78;
+}
+
+#daySelector {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+}
+#daySelector button {
+  min-width: 0;
+  min-height: 44px;
+  padding-inline: 2px;
+  white-space: nowrap;
+}
+.schedule-tip { white-space: normal; }
+.schedule-shell { isolation: isolate; }
+
+.artist-overlay,
+.artist-overlay:hover {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  mix-blend-mode: normal;
+  transform: none;
+}
+.artist-overlay.matched {
+  background: rgba(var(--heat), var(--alpha));
+  box-shadow: inset 0 0 0 1.5px rgba(var(--heat), calc(var(--alpha) + .35));
+}
+.artist-overlay::after { content: none; }
+
+.artist-overlay:focus-visible,
+.artist-overlay:hover {
+  outline: 2px solid #156797;
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.artist-directory { padding: 10px 14px 13px; }
+.artist-directory summary { cursor: pointer; font-weight: 700; }
+.artist-directory-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+.artist-directory-list button {
+  background: #f3f5f6;
+  border: 1px solid #d5dce1;
+  border-radius: 8px;
+  color: #1a252e;
+  text-align: left;
+  min-height: 44px;
+  padding: 7px 10px;
+}
+.artist-directory-list button.matched {
+  background: #d9efff;
+  border-color: #8dbddd;
+  color: #133d5a;
+}
+
+.recommendations { margin-top: 24px; }
+.recommendations h2 { margin: 0 0 4px; font-size: 22px; }
+.recommendations > p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+.recommendation-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 10px;
+}
+.recommendation-list > section {
+  background: #fff;
+  border: 1px solid #d5dce1;
+  border-radius: 14px;
+  padding: 13px 14px;
+}
+.recommendation-list h3 { margin: 0 0 4px; font-size: 17px; }
+.recommendation-group + .recommendation-group { margin-top: 12px; }
+.recommendation-group h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.recommendation-group h4::first-letter { text-transform: uppercase; }
+.recommendation-group button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1px solid #e5e9eb;
+  border-radius: 0;
+  background: transparent;
+  color: var(--lineup-blue);
+  text-align: left;
+}
+.recommendation-group button::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+}
+.recommendation-group button:hover { text-decoration: underline; }
+.listening-links { margin: 0; padding: 0; list-style: none; }
+.listening-links a {
+  display: inline-block;
+  padding: 6px 0;
+  color: var(--lineup-blue);
+  font-weight: 700;
+  text-underline-offset: .16em;
+}
+
+@media (max-width: 480px) {
+  #daySelector button { font-size: clamp(11px, 3.5vw, 14px); }
+}

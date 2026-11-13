@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Good people. Fun plans. New friends. An invite-only community in Austin.">
+  <title>Cool Strangers Club — Come hang.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root { --ink:#111; --muted:#62625d; --line:#d9d9d3; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:#fff; color:var(--ink); font-family:'EB Garamond',Georgia,serif; font-size:20px; line-height:1.4; }
+    a { color:inherit; text-underline-offset:4px; }
+    a:focus-visible, summary:focus-visible { outline:2px solid var(--ink); outline-offset:6px; }
+    .wrap { width:min(1120px, calc(100% - 96px)); margin:auto; }
+    .label { font-family:Arial,sans-serif; font-size:10px; letter-spacing:.15em; text-transform:uppercase; line-height:1.5; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:28px 0; border-bottom:1px solid var(--ink); gap:24px; }
+    .brand { font-size:23px; text-decoration:none; font-weight:500; }
+    nav { display:flex; gap:32px; align-items:center; }
+    nav a { text-decoration:none; font-size:17px; }
+    nav a:hover { text-decoration:underline; }
+    .hero { display:grid; grid-template-columns:1.3fr 1fr; align-items:center; gap:60px; padding:100px 0 108px; }
+    h1 { font-weight:400; font-size:clamp(68px,8vw,104px); line-height:.94; letter-spacing:-.055em; margin:22px 0 28px; }
+    h1 em { font-weight:400; }
+    .intro { max-width:380px; font-size:23px; margin:0 0 32px; line-height:1.35; }
+    .button { display:inline-flex; align-items:center; justify-content:space-between; gap:44px; padding:13px 24px; border:1px solid var(--ink); background:var(--ink); color:white; text-decoration:none; font-size:19px; transition:background .2s,color .2s; }
+    .button:hover { background:white; color:var(--ink); }
+    .note { color:var(--muted); font-size:16px; margin:12px 0 0; }
+    .invite { width:100%; max-width:400px; justify-self:end; border:1px solid var(--ink); padding:30px 34px; text-align:center; transform:rotate(4deg); position:relative; box-shadow:8px 8px 0 #f1f1ee; }
+    .invite .label { display:block; }
+    .asterisk { font-size:84px; line-height:1; margin:24px 0 8px; }
+    .invite h2 { font-size:43px; font-weight:400; letter-spacing:-.035em; line-height:1; margin:0 0 24px; }
+    .invite p { font-size:18px; margin:0 auto 30px; max-width:240px; }
+    .invite-bottom { border-top:1px solid var(--line); padding-top:18px; display:flex; justify-content:space-between; }
+    .how { border-top:1px solid var(--ink); padding:35px 0 60px; }
+    .section-heading { display:flex; align-items:baseline; justify-content:space-between; gap:20px; margin-bottom:40px; }
+    h2 { font-size:43px; font-weight:400; letter-spacing:-.035em; line-height:1.1; margin:0; }
+    .section-heading p { font-style:italic; color:var(--muted); margin:0; }
+    .steps { display:grid; grid-template-columns:repeat(3,1fr); list-style:none; padding:0; margin:0; }
+    .steps li { padding:0 34px; border-left:1px solid var(--line); }
+    .steps li:first-child { padding-left:0; border-left:0; }
+    .steps li:last-child { padding-right:0; }
+    .number { font-size:16px; color:var(--muted); }
+    h3 { font-weight:400; font-size:28px; margin:18px 0 8px; letter-spacing:-.02em; }
+    .steps p { margin:0; font-size:20px; max-width:280px; color:#444; }
+    .details { display:grid; grid-template-columns:1fr 1.5fr; gap:80px; border-top:1px solid var(--ink); padding:56px 0 70px; }
+    .details-intro p { color:var(--muted); max-width:250px; margin:18px 0 0; }
+    details { border-bottom:1px solid var(--line); }
+    details:first-child { border-top:1px solid var(--line); }
+    summary { cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; padding:19px 0; font-size:23px; gap:20px; }
+    summary::-webkit-details-marker { display:none; }
+    summary::after { content:'+'; font-size:24px; font-family:Arial,sans-serif; font-weight:300; }
+    details[open] summary::after { content:'−'; }
+    .answer { padding:0 30px 22px 0; color:#444; font-size:19px; }
+    .answer p { margin:0 0 12px; }
+    .answer p:last-child { margin:0; }
+    .answer a { overflow-wrap:anywhere; }
+    .closing { text-align:center; padding:54px 24px 60px; border:1px solid var(--ink); }
+    .closing h2 { font-size:54px; margin-bottom:12px; }
+    .closing p { margin:0 0 26px; color:var(--muted); }
+    footer { display:flex; justify-content:space-between; align-items:center; gap:24px; padding:30px 0; font-size:16px; }
+    footer p { margin:0; color:var(--muted); }
+    footer a { text-decoration:none; }
+    footer a:hover { text-decoration:underline; }
+    @media(max-width:760px) {
+      .wrap { width:calc(100% - 40px); }
+      header { padding:20px 0; }
+      .brand { font-size:21px; }
+      nav { gap:16px; } nav a { font-size:16px; } nav .how-link { display:none; }
+      .hero { grid-template-columns:1fr; padding:54px 0 60px; gap:48px; }
+      h1 { font-size:76px; }
+      .intro { max-width:360px; }
+      .invite { max-width:350px; justify-self:center; width:90%; transform:rotate(3deg); }
+      .section-heading { display:block; margin-bottom:30px; }
+      .section-heading p { margin-top:12px; }
+      h2 { font-size:37px; }
+      .steps { grid-template-columns:1fr; }
+      .steps li, .steps li:first-child, .steps li:last-child { padding:22px 0; border-left:0; border-top:1px solid var(--line); display:grid; grid-template-columns:38px 1fr; }
+      .number { padding-top:6px; grid-row:1/3; }
+      h3 { margin:0 0 7px; }
+      .steps p { max-width:none; }
+      .how { padding-bottom:28px; }
+      .details { grid-template-columns:1fr; gap:28px; padding:38px 0 45px; }
+      .details-intro p { max-width:none; margin-top:10px; }
+      .closing { padding:36px 18px 40px; }
+      .closing h2 { font-size:43px; }
+      footer { align-items:flex-start; flex-direction:column; gap:10px; }
+    }
+    @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .button { transition:none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="#">Cool Strangers Club</a>
+      <nav aria-label="Main navigation"><a class="how-link" href="#how">How it works</a><a href="https://forms.gle/QemuZmv9eEhDkomCA">Join the club ↗</a></nav>
+    </header>
+    <main>
+      <section class="hero" aria-labelledby="welcome">
+        <div>
+          <div class="label">Austin, Texas · Friends you haven’t met yet</div>
+          <h1 id="welcome">Strangers.<br>For <em>now.</em></h1>
+          <p class="intro">Good people. Fun plans. New friends.<br>We bring people together in Austin. You just have to show up.</p>
+          <a class="button" href="https://forms.gle/QemuZmv9eEhDkomCA">I got a card <span aria-hidden="true">↗</span></a>
+          <p class="note">Your invite code gets you started. Joining is free.</p>
+        </div>
+        <aside class="invite" aria-label="Your invitation">
+          <span class="label">A little invitation</span>
+          <div class="asterisk" aria-hidden="true">✳</div>
+          <h2>Someone thought<br>you were cool.</h2>
+          <p>That’s why you got a card.<br>Now come meet some more<br>people like that.</p>
+          <div class="invite-bottom label"><span>Cool Strangers Club</span><span>Austin, TX</span></div>
+        </aside>
+      </section>
+      <section class="how" id="how" aria-labelledby="how-title">
+        <div class="section-heading"><h2 id="how-title">Less planning. More hanging.</h2><p>Here’s how it works.</p></div>
+        <ol class="steps">
+          <li><span class="number">01 /</span><h3>Tell us a little.</h3><p>Use your invite code and tell us what you’re into. Don’t overthink it.</p></li>
+          <li><span class="number">02 /</span><h3>Watch your inbox.</h3><p>We’ll invite you to something we think you’ll like. It may take a little time.</p></li>
+          <li><span class="number">03 /</span><h3>Come hang.</h3><p>RSVP, meet the group, and see where it goes. That’s the whole idea.</p></li>
+        </ol>
+      </section>
+      <section class="details" aria-labelledby="details-title">
+        <div class="details-intro"><h2 id="details-title">A few good<br>questions.</h2><p>Small print, minus the small print.</p></div>
+        <div>
+          <details><summary>What kind of plans?</summary><div class="answer"><p>Sometimes loud, sometimes laid-back. Think dinner, a show, or something active. Each gathering brings together a group of people around something to do.</p><p>There’s no fixed schedule. We’ll email you when we have a good fit.</p></div></details>
+          <details><summary>What does it cost?</summary><div class="answer"><p>Joining is free. Some plans have a cost, like your dinner or a show ticket. We’ll always tell you upfront, and you never have to spend money to be part of the club.</p></div></details>
+          <details><summary>Who’s behind this?</summary><div class="answer"><p>A group of friends who grew up in Austin and wanted to make meeting new people easier. We run this as volunteers, just for fun.</p><p>Say hi to <a href="https://www.instagram.com/zane_giordano/" target="_blank" rel="noopener noreferrer">Zane on Instagram ↗</a> or <a href="mailto:coolstrangersclub@gmail.com">send us an email</a>.</p></div></details>
+          <details><summary>What’s the vibe?</summary><div class="answer"><p>Show up with intention. Include the person you don’t know. Be kind, and respect people’s boundaries—we have zero tolerance for making people uncomfortable.</p><p>Once you’re here, keep hanging out, host something, or get your own invite cards. Have an idea or a concern? <a href="mailto:coolstrangersclub@gmail.com">We’re all ears.</a></p></div></details>
+        </div>
+      </section>
+      <section class="closing" aria-labelledby="closing-title">
+        <h2 id="closing-title">See you out there.</h2>
+        <p>A little less scrolling. A few more people to know.</p>
+        <a class="button" href="https://forms.gle/QemuZmv9eEhDkomCA">Join with your invite code <span aria-hidden="true">↗</span></a>
+      </section>
+    </main>
+    <footer><a href="#">Cool Strangers Club</a><p>From Austin, with friends.</p><a href="mailto:coolstrangersclub@gmail.com">Say hello ↗</a></footer>
+  </div>
+</body>
+</html>

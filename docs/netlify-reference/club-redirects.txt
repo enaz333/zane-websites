@@ -1,0 +1,2 @@
+# Keep the previously shared mixed-case BuildFest URL working.
+/BuildFest   /buildfest/   301

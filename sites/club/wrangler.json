@@ -1,0 +1,30 @@
+{
+  "name": "zane-club",
+  "main": "../../workers/club.mjs",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "run_worker_first": [
+      "/BuildFest",
+      "/PhotoNotes",
+      "/PhotoNotes/*",
+      "/photonotes",
+      "/photonotes/*",
+      "/photo-notes",
+      "/photo-notes/*",
+      "/acl",
+      "/acl/*",
+      "/coachella",
+      "/coachella/*"
+    ]
+  },
+  "vars": {
+    "PERSONAL_ORIGIN": "https://zanegiordano.com",
+    "ACL_ORIGIN": "https://acl.zanegiordano.com",
+    "COACHELLA_ORIGIN": "https://coachella.zanegiordano.com"
+  }
+}

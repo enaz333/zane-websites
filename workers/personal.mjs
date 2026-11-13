@@ -22,6 +22,14 @@ export default {
     if (request.method === 'GET' || request.method === 'HEAD') {
       const project = projectRedirect(url, env.STAGING_PROJECT_ORIGINS);
       if (project) return project;
+      // Ordinary pages use /slug/ with an index.html. Preserve queries and
+      // verify that the directory exists before redirecting.
+      if (/^\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(url.pathname)) {
+        const asset = new URL(url);
+        asset.pathname += '/index.html';
+        const found = await env.ASSETS.fetch(new Request(asset, { method: 'HEAD' }));
+        if (found.ok) return redirect(url, url.pathname + '/');
+      }
     }
     const homepage = url.pathname === '/' || url.pathname === '/index.html';
     const response = await serveAssets(request, env.ASSETS, url);

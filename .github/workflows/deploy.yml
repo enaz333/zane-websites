@@ -1,35 +1,80 @@
 name: Publish Workers
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
-      target:
-        description: Choose staging, personal launch, festival launch, Club launch, project routes, or production
+      mode:
+        description: Staging, update existing Workers, or provision approved domains
         required: true
         type: choice
-        default: staging
-        options: [staging, personal-launch, festival-launch, club-launch, project-routes, production]
-      project:
-        description: Enabled project slug, all, or festivals for festival-launch
-        required: true
+        options: [staging, update, provision]
+      baseline:
+        description: Last successfully deployed main commit (production modes)
         type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-production
-  queue: max
+  group: ${{ inputs.mode == 'staging' && 'cloudflare-staging' || 'cloudflare-production' }}
+  cancel-in-progress: false
 
 jobs:
   publish:
-    # Keep general production publishing disabled until it is approved separately.
-    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected && ((github.event_name == 'workflow_dispatch' && inputs.target == 'personal-launch' && inputs.project == 'personal') || (github.event_name == 'workflow_dispatch' && inputs.target == 'festival-launch' && inputs.project == 'festivals') || (github.event_name == 'workflow_dispatch' && inputs.target == 'project-routes' && inputs.project == 'personal') || (github.event_name == 'workflow_dispatch' && inputs.target == 'club-launch' && inputs.project == 'club') || (false && (github.event_name == 'push' || inputs.target == 'production') && vars.WORKERS_PUBLISH_ENABLED == 'true')) }}
+    if: github.ref == 'refs/heads/main' && github.ref_protected && (inputs.mode == 'update' || inputs.mode == 'provision')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    environment: cloudflare-production
+    timeout-minutes: 35
+    environment: ${{ inputs.mode == 'provision' && 'cloudflare-provisioning' || 'cloudflare-production' }}
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+      BEFORE_SHA: ${{ inputs.baseline }}
+      AFTER_SHA: ${{ github.sha }}
+      MODE: ${{ inputs.mode }}
+    steps:
+      - name: Require owner setup
+        env:
+          ENABLED: ${{ vars.WORKERS_PUBLISH_ENABLED }}
+          PROVISIONING_ENABLED: ${{ vars.WORKERS_PROVISIONING_ENABLED }}
+        run: |
+          test "$ENABLED" = true
+          if [[ "$MODE" == provision ]]; then test "$PROVISIONING_ENABLED" = true; fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Validate and plan
+        run: |
+          [[ "$BEFORE_SHA" =~ ^[a-f0-9]{40}$ && "$BEFORE_SHA" != "$AFTER_SHA" ]]
+          git merge-base --is-ancestor "$BEFORE_SHA" "$AFTER_SHA"
+          python3 scripts/deploy_workers.py --before "$BEFORE_SHA" --after "$AFTER_SHA"
+          python3 scripts/validate.py
+          python3 -m unittest discover -s tests -v
+          node --test tests/workers.test.mjs
+      - name: Publish reviewed changes
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ inputs.mode == 'provision' && secrets.CLOUDFLARE_DOMAIN_API_TOKEN || '' }}
+        run: |
+          flags=()
+          if [[ "$MODE" == provision ]]; then flags+=(--provision); fi
+          python3 scripts/deploy_workers.py --apply "${flags[@]}" --before "$BEFORE_SHA" --after "$AFTER_SHA"
+
+  stage:
+    if: github.ref == 'refs/heads/main' && github.ref_protected && inputs.mode == 'staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: cloudflare-staging
     env:
       WRANGLER_SEND_METRICS: 'false'
     steps:
@@ -46,84 +91,13 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci
-      - name: Verify and plan
+      - name: Stage enabled projects
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-          PROJECT: ${{ inputs.project }}
-          TARGET: ${{ inputs.target }}
-        shell: bash
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.STAGING_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          WORKERS_DEV_SUBDOMAIN: ${{ vars.STAGING_WORKERS_DEV_SUBDOMAIN }}
+          PRODUCTION_ACCOUNT_ID: ${{ vars.PRODUCTION_ACCOUNT_ID }}
         run: |
-          if [[ "$TARGET" == personal-launch ]]; then
-            python3 scripts/deploy_workers.py --project photo-notes
-            python3 scripts/deploy_workers.py --project personal
-          elif [[ "$TARGET" == festival-launch ]]; then
-            python3 scripts/deploy_workers.py --project acl
-            python3 scripts/deploy_workers.py --project coachella
-          elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
-            python3 scripts/deploy_workers.py --project "$PROJECT"
-          else
-            python3 scripts/deploy_workers.py --before "$BEFORE_SHA" --after "$AFTER_SHA"
-          fi
-          python3 scripts/validate.py
-          python3 -m unittest discover -s tests -v
-          node --test tests/workers.test.mjs
-      - name: Publish in dependency order
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-          PROJECT: ${{ inputs.project }}
-          TARGET: ${{ inputs.target }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_DOMAIN_API_TOKEN: ${{ inputs.target != 'personal-launch' && inputs.target != 'festival-launch' && inputs.target != 'project-routes' && inputs.target != 'club-launch' && secrets.CLOUDFLARE_DOMAIN_API_TOKEN || '' }}
-        shell: bash
-        run: |
-          if [[ "$TARGET" == personal-launch ]]; then
-            npx --no-install wrangler deploy --config sites/photo-notes/wrangler.json
-            python3 scripts/deploy_workers.py --apply --project personal
-          elif [[ "$TARGET" == festival-launch ]]; then
-            npx --no-install wrangler deploy --config sites/acl/wrangler.json
-            npx --no-install wrangler deploy --config sites/coachella/wrangler.json
-          elif [[ "$TARGET" == club-launch ]]; then
-            python3 scripts/check_club_launch.py --destinations
-            npx --no-install wrangler deploy --config sites/club/wrangler.json
-          elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
-            python3 scripts/deploy_workers.py --apply --project "$PROJECT"
-          else
-            python3 scripts/deploy_workers.py --apply --before "$BEFORE_SHA" --after "$AFTER_SHA"
-          fi
-
-  stage:
-    name: Deploy temporary Workers and check routes
-    if: github.event_name == 'workflow_dispatch' && inputs.target == 'staging' && github.ref == 'refs/heads/main' && github.ref_protected
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: cloudflare-production
-    env:
-      WRANGLER_SEND_METRICS: 'false'
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: '22'
-          cache: npm
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.12'
-      - run: npm ci
-      - run: python3 scripts/validate.py
-      - run: python3 -m unittest discover -s tests -v
-      - run: node --test tests/workers.test.mjs
-      - name: Stage all enabled projects
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          WORKERS_DEV_SUBDOMAIN: ${{ vars.CLOUDFLARE_WORKERS_DEV_SUBDOMAIN }}
-        run: python3 scripts/stage_workers.py --subdomain "$WORKERS_DEV_SUBDOMAIN" --run-id "$GITHUB_RUN_ID"
+          [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ && "$PRODUCTION_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]]
+          [[ "$CLOUDFLARE_ACCOUNT_ID" != "$PRODUCTION_ACCOUNT_ID" && -n "$CLOUDFLARE_API_TOKEN" ]]
+          python3 scripts/stage_workers.py --subdomain "$WORKERS_DEV_SUBDOMAIN" --run-id "$GITHUB_RUN_ID"

@@ -313,6 +313,7 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
   assert.throws(() => applyCopy(source, '<script>alert(1)</script>'));
   assert.throws(() => applyCopy('<p>Wrong file</p>', 'Selected projects'));
   let modelCalls = 0, checks = 0, prs = 0, ref, draft;
+  let smokePasses = false;
   const fetcher = async (url, options) => {
     const { hostname, pathname } = new URL(url);
     const body = options.body && JSON.parse(options.body);
@@ -326,6 +327,10 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
         output: [{ type: 'message', content: [{ type: 'output_text', text: '{"replacement":"Selected projects"}' }] }] });
     }
     if (hostname === 'example.run.app') {
+      if (body.replacement === 'Studio validator smoke test') {
+        assert.equal(body.base, base);
+        return Response.json({ base, passed: smokePasses, digest: await copyDigest(applyCopy(source, body.replacement)) });
+      }
       checks++;
       assert.deepEqual(body, { base, replacement: 'Selected projects' });
       assert.equal(options.headers.Authorization, 'Bearer ' + env.STUDIO_CHECK_SECRET);
@@ -386,6 +391,13 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
   await tick({ ...env, STUDIO_RATE_CARD: '' }, { fetcher, now });
   await tick({ ...env, STUDIO_TEST_TASK_ID: cancelled.id }, { fetcher, now });
   assert.equal(modelCalls, 0);
+  // An unsuccessful real validator preflight must never reach OpenAI.
+  await tick({ ...env, STUDIO_TEST_TASK_ID: waiting.id }, { fetcher, now });
+  assert.equal(modelCalls, 0);
+  assert.equal((await db.prepare('SELECT state FROM task_executions WHERE task_id = ?').bind(waiting.id).first()).state, 'failed');
+  await db.prepare('DELETE FROM execution_dispatch WHERE task_id = ?').bind(waiting.id).run();
+  const next = await submit('Wait for budget');
+  smokePasses = true;
   await Promise.all([step(), step(), step()]);
   assert.equal(modelCalls, 1);
   const history = async id => (await (await call('/api/tasks')).json()).tasks.find(t => t.id === id);
@@ -400,10 +412,23 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
   assert.equal(prs, 1);
   assert.equal((await history(task.id)).pr_number, 321);
   assert.equal((await history(task.id)).check_summary, 'Repository checks passed');
-  await tick({ ...env, STUDIO_TEST_TASK_ID: waiting.id }, { fetcher, now });
+  await tick({ ...env, STUDIO_TEST_TASK_ID: next.id }, { fetcher, now });
   assert.equal(modelCalls, 1);
-  assert.equal((await history(waiting.id)).status, 'queued');
+  assert.equal((await history(next.id)).status, 'queued');
   assert.equal((await history(cancelled.id)).status, 'cancelled');
   const { results } = await db.prepare('SELECT reserved_micros, input_tokens, output_tokens FROM execution_dispatch').all();
   assert.deepEqual(results, [{ reserved_micros: reservation, input_tokens: 500, output_tokens: 20 }]);
+});
+
+test('staging verifier accepts only its configured staging host and Access audience', async () => {
+  const stagingOrigin = 'https://studio-staging.zanegiordano.com';
+  const stagingAud = 'staging-audience';
+  const stagingVerifier = createAccessVerifier(async () => Response.json({ keys: [jwk] }), undefined, stagingOrigin);
+  const env = { ...config, STUDIO_ORIGIN: stagingOrigin, ACCESS_AUD: stagingAud };
+  const header = value => ({ headers: { 'Cf-Access-Jwt-Assertion': value } });
+  const stagingToken = await token({ aud: [stagingAud] });
+  assert.equal(await stagingVerifier(new Request(stagingOrigin, header(stagingToken)), env), issuer + '#owner-id');
+  assert.equal(await stagingVerifier(new Request(stagingOrigin, header(good)), env), null);
+  assert.equal(await stagingVerifier(new Request(origin, header(stagingToken)), env), null);
+  assert.equal(await verify(new Request(stagingOrigin, header(stagingToken)), env), null);
 });

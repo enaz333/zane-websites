@@ -3,6 +3,7 @@ import { budget, propose, reservation } from './studio-provider.mjs';
 import { appToken, publish, sourceAt } from './studio-publisher.mjs';
 
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
+const smokeReplacement = 'Studio validator smoke test';
 const contextFiles = ['AGENTS.md', 'design/BRAND.md', 'sites/personal/AGENTS.md'];
 const scope = "t.kind = 'edit' AND t.project = 'personal' AND (t.page IS NULL OR t.page IN ('/', 'https://zanegiordano.com', 'https://zanegiordano.com/'))";
 const plus = (date, minutes) => new Date(date.getTime() + minutes * 60_000).toISOString();
@@ -101,6 +102,9 @@ export async function tick(env, { fetcher = fetch, now = () => new Date() } = {}
     if (phase === 'prepare') {
       const context = Object.fromEntries(await Promise.all([...contextFiles, path].map(async file =>
         [file, await sourceAt(run.base_sha, file, fetcher)])));
+      if (!await validate(env, { ...run, replacement: smokeReplacement }, fetcher)) {
+        return await finish(db, run, now(), 'checks_failed');
+      }
       const time = now();
       if (iso(time).slice(0, 7) !== run.month ||
           plus(time, 2).slice(0, 7) !== run.month) return await finish(db, run, time, 'execution_failed');

@@ -57,7 +57,7 @@ A JSON `403` with `Access denied.` comes from the Studio Worker before it reads 
 
 In **GitHub → Settings → Environments → cloudflare-studio-production**, compare the configured values with the Access app. Use the team's HTTPS `cloudflareaccess.com` origin without a trailing slash for `ACCESS_TEAM_ORIGIN`, the current app's AUD for `ACCESS_AUD`, and the email shown by Access for `STUDIO_OWNER_EMAIL`. Studio compares email without regard to case and requires the same address, including any alias or plus suffix. Set `STUDIO_ORIGIN` to `https://studio.zanegiordano.com` without a trailing slash. Under **Workers & Pages → zane-studio → Settings → Variables and Secrets**, check that all four names are present. GitHub changes take effect in the Worker after an approved deployment.
 
-After deploying the diagnostics, open **Workers & Pages → zane-studio → Observability → Live** and retry sign-in in a fresh browser session. Look for `studio_access_denied` and its stage. The warning contains only a fixed stage name.
+After deploying the diagnostics, open **Workers & Pages → zane-studio → Observability → Live** and retry sign-in in a fresh browser session. Look for `studio_access_denied` and its stage. The warning contains a fixed stage name and, for HTTP failures, a numeric status.
 
 | Stage | Check |
 | --- | --- |
@@ -65,7 +65,9 @@ After deploying the diagnostics, open **Workers & Pages → zane-studio → Obse
 | `assertion_missing`, `assertion_size`, `jwt_format`, `jwt_header` | Check that Access protects the requested path and injects the application JWT in `Cf-Access-Jwt-Assertion`. Check any request transforms and confirm the token has an RS256 signing key ID. |
 | `issuer`, `audience` | Compare the team origin and Studio application AUD with the protected GitHub environment. If the app was recreated, use its new AUD. |
 | `owner_email`, `token_type`, `subject`, `token_time` | Verify the identity in Access logs and retry a fresh login. The Worker expects an identity-based app token with a user subject, current expiry, and an elapsed not-before time when present. |
-| `jwks_fetch`, `jwks_format`, `signing_key`, `signing_key_import`, `signature` | Check the configured team's public `/cdn-cgi/access/certs` endpoint for a reachable JSON key set with RSA signing keys. Retry after the one-minute key cache expires if keys recently rotated. |
+| `jwks_http_status`, `jwks_redirect` | Check the status in the warning. The configured team’s public `/cdn-cgi/access/certs` endpoint must return HTTP 200 directly. |
+| `jwks_timeout`, `jwks_fetch_exception`, `jwks_format` | Check that the endpoint is reachable from Workers and returns a JSON key set within five seconds. |
+| `signing_key`, `signing_key_import`, `signature` | Check that the configured team publishes the token’s signing key. Retry after the one-minute key cache expires if keys recently rotated. |
 
 Keep JWTs, cookie values, full log events, and account settings out of PRs. A fixed stage name is sufficient for follow-up.
 

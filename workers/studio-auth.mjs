@@ -9,9 +9,10 @@ function bytes(part) {
 
 export function createAccessVerifier(fetchKeys = fetch, reportFailure = () => {}) {
   let cache;
-  function deny(stage) {
-    // Pass only fixed stage names. Never pass the request, JWT, claims or exceptions.
-    reportFailure(stage);
+  function deny(stage, status) {
+    // Pass only fixed stage names and HTTP status codes. Never pass the request, JWT, claims or exceptions.
+    if (status === undefined) reportFailure(stage);
+    else reportFailure(stage, status);
     return null;
   }
 
@@ -60,15 +61,24 @@ export function createAccessVerifier(fetchKeys = fetch, reportFailure = () => {}
     }
 
     if (cache?.issuer !== issuer || cache.until <= now) {
+      const signal = AbortSignal.timeout(5000);
+      let response;
+      try {
+        // Workers support manual redirects. Reject them without contacting the destination.
+        response = await fetchKeys(issuer + '/cdn-cgi/access/certs', { redirect: 'manual', signal });
+      } catch {
+        return deny(signal.aborted ? 'jwks_timeout' : 'jwks_fetch_exception');
+      }
+      if (response.status >= 300 && response.status < 400) {
+        return deny('jwks_redirect', response.status);
+      }
+      if (response.status !== 200) return deny('jwks_http_status', response.status);
+
       let keys;
       try {
-        const response = await fetchKeys(issuer + '/cdn-cgi/access/certs', {
-          redirect: 'error', signal: AbortSignal.timeout(5000),
-        });
-        if (!response.ok) return deny('jwks_fetch');
-        ({ keys } = await response.json());
+        keys = (await response.json())?.keys;
       } catch {
-        return deny('jwks_fetch');
+        return deny(signal.aborted ? 'jwks_timeout' : 'jwks_format');
       }
       if (!Array.isArray(keys)) return deny('jwks_format');
       // Store settled data only: Workers cannot share request-scoped I/O.

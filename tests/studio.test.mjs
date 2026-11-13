@@ -165,15 +165,64 @@ test('Access reports only the failed stage and keeps the HTTP denial generic', a
     assert.deepEqual(await response.json(), { error: 'Access denied.' });
     assert.deepEqual(stages.pop(), [stage]);
   }
-  for (const [stage, keyResponse] of [
-    ['jwks_fetch', new Response(null, { status: 503 })],
+  for (const [stage, keyResponse, status] of [
+    ['jwks_http_status', new Response(null, { status: 503 }), 503],
+    ['jwks_redirect', Response.redirect('https://example.net/'), 302],
+    ['jwks_format', new Response('not JSON')],
     ['jwks_format', Response.json({ keys: {} })],
     ['signing_key_import', Response.json({ keys: [{ ...jwk, n: undefined }] })],
   ]) {
     const verifier = createAccessVerifier(async () => keyResponse, (...args) => stages.push(args));
     assert.equal(await verifier(request('/'), config), null);
-    assert.deepEqual(stages.pop(), [stage]);
+    assert.deepEqual(stages.pop(), status === undefined ? [stage] : [stage, status]);
+  }
+  for (const timedOut of [false, true]) {
+    const verifier = createAccessVerifier(async () => { throw new Error('private exception detail'); },
+      (...args) => stages.push(args));
+    const timeout = AbortSignal.timeout;
+    try {
+      if (timedOut) AbortSignal.timeout = () => AbortSignal.abort();
+      assert.equal(await verifier(request('/'), config), null);
+      assert.deepEqual(stages.pop(), [timedOut ? 'jwks_timeout' : 'jwks_fetch_exception']);
+    } finally {
+      AbortSignal.timeout = timeout;
+    }
   }
   assert.equal(await authenticate(request('/'), config), issuer + '#owner-id');
   assert.deepEqual(stages, []);
+});
+
+test('Workers runtime retrieves keys and verifies a signed Access token', async () => {
+  const source = await readFile(new URL('../workers/studio-auth.mjs', import.meta.url), 'utf8');
+  const runtime = new Miniflare(convertV4MiniflareOptions({ workers: [
+    {
+      name: 'studio-auth', compatibilityDate: '2026-11-12', outboundService: 'certs',
+      modules: [
+        { type: 'ESModule', path: 'auth-test.mjs', contents: `
+          import { createAccessVerifier } from './studio-auth.mjs';
+          const verify = createAccessVerifier();
+          export default { async fetch(request, env) {
+            return new Response(await verify(request, env) ? 'verified' : 'denied');
+          }};
+        ` },
+        { type: 'ESModule', path: 'studio-auth.mjs', contents: source },
+      ],
+      bindings: config,
+    },
+    {
+      name: 'certs', modules: true, bindings: { jwk, issuer },
+      script: `export default { fetch(request, env) {
+        if (request.url !== env.issuer + '/cdn-cgi/access/certs') return new Response(null, { status: 404 });
+        return Response.json({ keys: [env.jwk] });
+      }};`,
+    },
+  ] }));
+  try {
+    const response = await runtime.dispatchFetch(origin + '/', {
+      headers: { 'Cf-Access-Jwt-Assertion': good },
+    });
+    assert.equal(await response.text(), 'verified');
+  } finally {
+    await runtime.dispose();
+  }
 });

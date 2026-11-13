@@ -158,6 +158,22 @@ def git(*args, root=ROOT):
     return subprocess.check_output(["git", *args], cwd=root)
 
 
+PROJECT_DOCUMENTS = {"AGENTS.md", "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md"}
+SHARED_BUILD_INPUTS = {"package.json", "package-lock.json", ".npmrc"}
+
+
+def project_runtime_change(path, slug):
+    prefix = f"sites/{slug}/"
+    if not path.startswith(prefix):
+        return False
+    relative = path.removeprefix(prefix)
+    if relative in PROJECT_DOCUMENTS:
+        return False
+    # Keep every file in public/ and src/, regardless of extension. Only the
+    # dedicated docs directory is reserved for prose outside the project root.
+    return not (relative.startswith("docs/") and Path(relative).suffix.lower() in {".md", ".rst", ".txt"})
+
+
 def affected(projects, before, after, root=ROOT):
     if re.fullmatch(r"0{40}", before):
         return {slug for slug, project in projects.items() if project["enabled"]}
@@ -171,7 +187,8 @@ def affected(projects, before, after, root=ROOT):
         slug for slug, entry in projects.items()
         if entry["enabled"] and (
             previous.get(slug) != merged.get(slug)
-            or any(path.startswith(f"sites/{slug}/") for path in paths)
+            or paths.intersection(SHARED_BUILD_INPUTS)
+            or any(project_runtime_change(path, slug) for path in paths)
             or paths.intersection(set(entry["watch"]) | set(previous.get(slug, {}).get("watch", [])))
         )
     }

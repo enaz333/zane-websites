@@ -1,4 +1,5 @@
 import json
+from urllib.error import HTTPError
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -148,15 +149,37 @@ class ReleaseTests(unittest.TestCase):
 
     def test_anonymous_probe_checks_assets_and_api_and_does_not_follow_redirect(self):
         issuer = self.runtime["ACCESS_TEAM_ORIGIN"]
-        response = Mock(status=302, headers={"Location": issuer + "/cdn-cgi/access/login/" + studio.HOST})
+        login = issuer + "/cdn-cgi/access/login/" + studio.HOST
         opener = MagicMock()
-        opener.open.return_value.__enter__.return_value = response
+
+        def redirect(request, timeout):
+            self.assertEqual(request.get_header("User-agent"), studio.USER_AGENT)
+            self.assertIsNone(request.get_header("Cookie"))
+            self.assertIsNone(request.get_header("Authorization"))
+            raise HTTPError(request.full_url, 302, "", {"Location": login + "?opaque=fixture"}, None)
+
+        opener.open.side_effect = redirect
         with patch.object(studio, "build_opener", return_value=opener) as build:
             self.verify_access_redirect(issuer)
             self.assertIsInstance(build.call_args.args[0], studio.NoRedirect)
-            self.assertIn(studio.ORIGIN + "/studio.js", [call.args[0] for call in opener.open.call_args_list])
-            self.assertIn(studio.ORIGIN + "/api/tasks", [call.args[0] for call in opener.open.call_args_list])
-            for status, destination in [(200, ""), (302, "https://other.example/cdn-cgi/access/login/studio")]:
-                response.status, response.headers = status, {"Location": destination}
-                with self.assertRaisesRegex(ValueError, "Access challenge"):
-                    self.verify_access_redirect(issuer)
+            paths = [call.args[0].full_url.removeprefix(studio.ORIGIN) for call in opener.open.call_args_list]
+            self.assertEqual(paths, ["/", "/index.html", "/studio.js", "/studio.css", "/api/projects", "/api/tasks"])
+
+    def test_anonymous_probe_rejects_blocks_challenges_and_unrelated_redirects(self):
+        issuer = self.runtime["ACCESS_TEAM_ORIGIN"]
+        login = issuer + "/cdn-cgi/access/login/" + studio.HOST
+        opener = MagicMock()
+        with patch.object(studio, "build_opener", return_value=opener):
+            for status, headers in [
+                (200, {}),
+                (403, {}),
+                (403, {"cf-mitigated": "challenge"}),
+                (302, {"Location": login, "cf-mitigated": "challenge"}),
+                (302, {"Location": issuer + "/cdn-cgi/access/login/other.example?opaque=fixture"}),
+                (302, {"Location": "https://other.example/cdn-cgi/access/login/" + studio.HOST}),
+            ]:
+                with self.subTest(status=status, headers=headers):
+                    opener.open.side_effect = HTTPError(studio.ORIGIN, status, "", headers, None)
+                    with self.assertRaisesRegex(ValueError, f"Access challenge.*HTTP {status}") as err:
+                        self.verify_access_redirect(issuer)
+                    self.assertNotIn("opaque", str(err.exception))

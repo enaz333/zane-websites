@@ -14,7 +14,7 @@ from urllib.request import Request, build_opener
 
 from deploy_workers import record
 from projects import ROOT, load, parse
-from stage_workers import NoRedirect
+from stage_workers import NoRedirect, USER_AGENT
 
 WORKER = "zane-studio"
 HOST = "studio.zanegiordano.com"
@@ -155,18 +155,28 @@ class StudioCloudflare:
 def verify_access_redirect(issuer):
     opener = build_opener(NoRedirect())
     for path in ("/", "/index.html", "/studio.js", "/studio.css", "/api/projects", "/api/tasks"):
+        request = Request(ORIGIN + path, headers={"User-Agent": USER_AGENT})
         try:
-            with opener.open(ORIGIN + path, timeout=20) as response:
-                status, location = response.status, response.headers.get("Location")
+            with opener.open(request, timeout=20) as response:
+                status, headers = response.status, response.headers
         except HTTPError as err:
-            status, location = err.code, err.headers.get("Location")
+            status, headers = err.code, err.headers
+            err.close()
         except OSError:
             raise ValueError(f"Could not reach Studio at {path}") from None
-        dest = urlsplit(location or "")
-        if (status not in (302, 303, 307, 308)
+        try:
+            dest = urlsplit(headers.get("Location") or "")
+        except ValueError:
+            raise ValueError(f"Studio returned an invalid redirect at {path} (HTTP {status})") from None
+        challenged = headers.get("cf-mitigated") == "challenge"
+        if (challenged or status not in (302, 303, 307, 308)
                 or f"{dest.scheme}://{dest.netloc}" != issuer
-                or not dest.path.startswith("/cdn-cgi/access/login/")):
-            raise ValueError(f"Studio did not return the expected anonymous Access challenge at {path}")
+                or dest.path != f"/cdn-cgi/access/login/{HOST}"):
+            detail = ", Cloudflare challenge" if challenged else ""
+            raise ValueError(
+                f"Studio did not return the expected anonymous Access challenge at {path} "
+                f"(HTTP {status}{detail})"
+            )
 
 
 def uploaded_version(output):

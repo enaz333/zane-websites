@@ -74,6 +74,26 @@ test('Access fails closed for both page assets and API', async () => {
   assert.match(asset.headers.get('Content-Security-Policy'), /frame-ancestors 'none'/);
 });
 
+test('missing configuration, forged identity headers and missing signing keys fail closed', async () => {
+  const never = () => { throw new Error('Unauthenticated request reached a binding'); };
+  const env = { ...config, ASSETS: { fetch: never }, DB: { withSession: never } };
+  for (const path of ['/', '/studio.js', '/api/tasks']) {
+    const forged = request(path, { auth: '', headers: {
+      'Cf-Access-Authenticated-User-Email': config.STUDIO_OWNER_EMAIL,
+      Cookie: 'CF_Authorization=' + good,
+    } });
+    assert.equal((await production.fetch(forged, env)).status, 403);
+  }
+  for (const key of Object.keys(config)) {
+    assert.equal((await studio.fetch(request('/api/tasks'), { ...env, [key]: '' })).status, 403);
+  }
+  const unavailable = createStudio(createAccessVerifier(async () => new Response(null, { status: 503 })));
+  assert.equal((await unavailable.fetch(request('/'), env)).status, 403);
+  const denied = await api('/api/tasks', { auth: '', body: edit });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.headers.get('Cache-Control'), 'private, no-store');
+});
+
 test('task submission checks origin, input, page targets and reserved paths', async () => {
   assert.equal((await api('/api/tasks', { body: edit, headers: { Origin: 'https://other.example' } })).status, 403);
   assert.equal((await api('/api/tasks', { body: edit, headers: { 'Sec-Fetch-Site': 'same-site' } })).status, 403);

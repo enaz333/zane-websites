@@ -9,6 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "https://studio-staging.zanegiordano.com"
 DATABASE = "zane-studio-staging"
 BUDGET = "262548"
+DISPATCH_CONNECTION = {
+    "STUDIO_CHECK_ORIGIN": "https://studio-validator-staging-7a3kki4cka-uc.a.run.app",
+    "STUDIO_GITHUB_APP_ID": "5741231",
+    "STUDIO_GITHUB_INSTALLATION_ID": "181522020",
+}
 
 
 def prepare(args):
@@ -31,7 +36,7 @@ def prepare(args):
     dispatcher = json.loads((ROOT / "sites/studio/executor/wrangler.json").read_text())
     dispatcher.update(name="zane-studio-dispatch-staging",
                       main=str(ROOT / "workers/studio-dispatch-worker.mjs"), d1_databases=binding,
-                      vars={"STUDIO_STAGING_ID": args.database, "STUDIO_BASE_SHA": args.base,
+                      vars={**DISPATCH_CONNECTION, "STUDIO_STAGING_ID": args.database, "STUDIO_BASE_SHA": args.base,
                             "STUDIO_EXECUTION_ENABLED": "false",
                             "STUDIO_RUN_MICROS": BUDGET, "STUDIO_MONTH_MICROS": BUDGET})
     args.out.mkdir(parents=True)

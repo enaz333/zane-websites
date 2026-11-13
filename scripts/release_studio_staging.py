@@ -10,11 +10,12 @@ import time
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, build_opener
 
-from prepare_studio_staging import BUDGET, DATABASE, ORIGIN, ROOT, prepare
+from prepare_studio_staging import BUDGET, DATABASE, DISPATCH_CONNECTION, ORIGIN, ROOT, prepare
 from release_studio import NoRedirect, SHA, UUID, StudioCloudflare, record, wrangler
 
 DISPATCH = "zane-studio-dispatch-staging"
 MIGRATIONS = {"0001_tasks.sql", "0002_execution.sql", "0003_dispatch.sql"}
+DISPATCH_SECRETS = {"STUDIO_OPENAI_KEY", "STUDIO_GITHUB_PRIVATE_KEY", "STUDIO_CHECK_SECRET"}
 ACCESS = ("ACCESS_TEAM_ORIGIN", "ACCESS_AUD", "STUDIO_OWNER_EMAIL")
 RECOVERY_WEB_VERSION = "427e7aff-6a11-4ce0-a6b0-f3d89ff8f735"
 RECOVERY_WEB_SHA = "c8465075f889f7cb4db2e243f4ebac48d0ebcccf"
@@ -77,7 +78,7 @@ def validate_plan(plan, staging, base):
     dispatcher = common | {
         "name": DISPATCH, "main": str(ROOT / "workers/studio-dispatch-worker.mjs"),
         "compatibility_flags": ["nodejs_compat"],
-        "vars": {"STUDIO_STAGING_ID": staging, "STUDIO_BASE_SHA": base, "STUDIO_EXECUTION_ENABLED": "false",
+        "vars": {**DISPATCH_CONNECTION, "STUDIO_STAGING_ID": staging, "STUDIO_BASE_SHA": base, "STUDIO_EXECUTION_ENABLED": "false",
                  "STUDIO_RUN_MICROS": BUDGET, "STUDIO_MONTH_MICROS": BUDGET},
     }
     for filename, expected in (("web.json", web), ("dispatcher.json", dispatcher)):
@@ -160,7 +161,7 @@ def verify_marker(plan, env, staging):
         raise ValueError("Staging D1 marker verification failed")
 
 
-def deploy_worker(worker, config, env, base, staging, runtime=None, *, previous=None, rate_card=None):
+def deploy_worker(worker, config, env, base, staging, runtime=None, *, previous=None, rate_card=None, retained_secrets=()):
     output = config.with_suffix(".jsonl")
     flags = []
     if runtime is not None:
@@ -176,11 +177,12 @@ def deploy_worker(worker, config, env, base, staging, runtime=None, *, previous=
         raise ValueError("Unexpected Wrangler deployment result")
     record(f"{worker.worker}: uploaded version `{version}`.")
     wait_for_version(worker, version, previous)
-    verify_worker_version(worker, version, base, staging, runtime, rate_card=rate_card)
+    verify_worker_version(worker, version, base, staging, runtime, rate_card=rate_card,
+                          retained_secrets=retained_secrets)
     record(f"{worker.worker}: version `{version}` active at 100%; workers.dev and previews disabled.")
 
 
-def verify_worker_version(worker, version, base, staging, runtime=None, *, rate_card=None):
+def verify_worker_version(worker, version, base, staging, runtime=None, *, rate_card=None, retained_secrets=()):
     worker.require_private_endpoints()
     info = worker.script(f"versions/{version}")
     if info.get("annotations", {}).get("workers/tag") != base:
@@ -191,10 +193,11 @@ def verify_worker_version(worker, version, base, staging, runtime=None, *, rate_
             or (databases[0].get("database_id") or databases[0].get("id")) != staging):
         raise ValueError("Deployed Worker does not bind exclusively to staging D1")
     secrets = {binding["name"] for binding in bindings if binding["type"] == "secret_text"}
-    if secrets != (set(ACCESS) if runtime is not None else set()):
+    if secrets != (set(ACCESS) if runtime is not None else set(retained_secrets)):
         raise ValueError("Deployed Worker has unexpected secret bindings")
     expected_vars = ({"STUDIO_ORIGIN": ORIGIN, "STUDIO_QUEUE_ENABLED": "true"} if runtime is not None else
-                     {"STUDIO_STAGING_ID": staging, "STUDIO_BASE_SHA": base, "STUDIO_EXECUTION_ENABLED": "false",
+                     {**DISPATCH_CONNECTION, "STUDIO_STAGING_ID": staging, "STUDIO_BASE_SHA": base,
+                      "STUDIO_EXECUTION_ENABLED": "false",
                       "STUDIO_RUN_MICROS": BUDGET, "STUDIO_MONTH_MICROS": BUDGET})
     if rate_card is not None:
         expected_vars["STUDIO_RATE_CARD"] = rate_card
@@ -233,10 +236,13 @@ def refresh_dispatcher(worker, plan, d1_env, worker_env, staging, expected, base
     bindings = worker.script(f"versions/{expected}")["resources"]["bindings"]
     db = [item for item in bindings if item["type"] == "d1"]
     variables = {item["name"]: item["text"] for item in bindings if item["type"] == "plain_text"}
+    secrets = {item["name"] for item in bindings if item["type"] == "secret_text"}
+    if not secrets <= DISPATCH_SECRETS:
+        raise ValueError("Existing dispatcher has unexpected secret bindings")
     if (len(db) != 1 or db[0]["name"] != "DB" or (db[0].get("database_id") or db[0].get("id")) != staging
             or variables.get("STUDIO_STAGING_ID") != staging or variables.get("STUDIO_EXECUTION_ENABLED") != "false"
             or "STUDIO_TEST_TASK_ID" in variables
-            or any(item["type"] not in {"d1", "plain_text"} for item in bindings)):
+            or any(item["type"] not in {"d1", "plain_text", "secret_text"} for item in bindings)):
         raise ValueError("Existing dispatcher is not disabled with only staging bindings")
     verify_marker(plan, d1_env, staging)
     config = plan / "dispatcher.json"
@@ -249,7 +255,8 @@ def refresh_dispatcher(worker, plan, d1_env, worker_env, staging, expected, base
     if worker.active() != expected:
         raise ValueError("Dispatcher changed during refresh preflight")
     record(f"Prior dispatcher version: `{expected}`. Verified D1 marker `{staging}` and reviewed source `{base}`.")
-    deploy_worker(worker, config, worker_env, base, staging, previous=expected, rate_card=LUNA_RATE_CARD)
+    deploy_worker(worker, config, worker_env, base, staging, previous=expected, rate_card=LUNA_RATE_CARD,
+                  retained_secrets=secrets)
     require_inert_dispatcher(worker)
 
 

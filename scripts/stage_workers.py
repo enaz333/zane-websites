@@ -10,9 +10,13 @@ import tempfile
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from projects import ROOT, config_path, load, ordered
+
+
+USER_AGENT = "zane-websites-smoke/1.0 (+https://github.com/enaz333/zane-websites)"
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -32,8 +36,30 @@ def staging_config(slug, names, origins):
     return config
 
 
+def forbidden_details(response):
+    headers = response.headers
+    details = [f"{name}: {headers[name]!r}" for name in
+               ("Server", "CF-Ray", "CF-Mitigated", "Content-Type", "CF-Error-Code")
+               if name in headers]
+    location = urlsplit(headers.get("Location", ""))
+    body = response.read(65536).decode("utf-8", errors="replace")
+    code = re.search(r"\berror(?:[\s:_-]+code)?[\s:_-]+(1[0-9]{3})\b", body, re.I)
+    if code:
+        details.append(f"Cloudflare error page code: {code[1]}")
+    if headers.get("CF-Error-Code") == "1010" or (code and code[1] == "1010"):
+        details.append("Cloudflare Browser Integrity Check (1010)")
+    if (location.path.startswith("/cdn-cgi/access/")
+            or "/cdn-cgi/access/" in body
+            or re.search(r"Cloudflare (?:Zero Trust|Access)", body, re.I)):
+        details.append("Cloudflare Access sign-in or denial marker")
+    if not code and "CF-Error-Code" not in headers:
+        details.append("No Cloudflare error code found in the response headers or first 64 KiB")
+    return "; ".join(details)
+
+
 def check(opener, origin, path, status, *, location=None, marker=None, method="GET"):
-    request = Request(origin + path, method=method)
+    request = Request(origin + path, headers={"User-Agent": USER_AGENT}, method=method)
+    last_forbidden = None
     for attempt in range(12):
         try:
             try:
@@ -47,10 +73,14 @@ def check(opener, origin, path, status, *, location=None, marker=None, method="G
                     print(f"{method} {request.full_url} → {status}", flush=True)
                     return
                 problem = f"HTTP {result.code}, unexpected response"
+                if result.code == 403:
+                    last_forbidden = forbidden_details(result)
         except (URLError, TimeoutError) as error:
             problem = str(error)
         if attempt < 11:
             time.sleep(5)
+    if last_forbidden is not None:
+        problem += f" (last HTTP 403 details: {last_forbidden})"
     raise ValueError(f"{method} {request.full_url}: {problem}")
 
 

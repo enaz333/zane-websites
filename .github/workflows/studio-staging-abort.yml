@@ -1,0 +1,52 @@
+name: Close the original Studio staging task
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: Full reviewed main SHA for this recovery
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloudflare-studio-staging
+  cancel-in-progress: false
+
+jobs:
+  close-task:
+    if: github.repository == 'enaz333/zane-websites' && github.ref == 'refs/heads/main' && github.ref_protected
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: cloudflare-studio-staging
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Verify reviewed main and owner approval
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          STUDIO_STAGING_RELEASE_ENABLED: ${{ vars.STUDIO_STAGING_RELEASE_ENABLED }}
+        run: |
+          test "$STUDIO_STAGING_RELEASE_ENABLED" = true
+          test "$REVIEWED_SHA" = "$GITHUB_SHA"
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          python3 scripts/release_studio_staging.py --verify-approval
+      - name: Close only the original staging task
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          STUDIO_STAGING_D1_ID: ${{ vars.STUDIO_STAGING_D1_ID }}
+          STUDIO_STAGING_D1_TOKEN: ${{ secrets.STUDIO_STAGING_D1_TOKEN }}
+          STUDIO_STAGING_DEPLOY_TOKEN: ${{ secrets.STUDIO_STAGING_DEPLOY_TOKEN }}
+        run: python3 scripts/abort_studio_staging.py

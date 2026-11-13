@@ -7,7 +7,7 @@ function bytes(part) {
   return Uint8Array.from(atob(part.replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0));
 }
 
-export function createAccessVerifier(fetchKeys = fetch, reportFailure = () => {}) {
+export function createAccessVerifier(fetchKeys = fetch, reportFailure = () => {}, expectedOrigin = 'https://studio.zanegiordano.com') {
   let cache;
   function deny(stage, status) {
     // Pass only fixed stage names and HTTP status codes. Never pass the request, JWT, claims or exceptions.
@@ -20,7 +20,7 @@ export function createAccessVerifier(fetchKeys = fetch, reportFailure = () => {}
     const { ACCESS_TEAM_ORIGIN: issuer, ACCESS_AUD: audience, STUDIO_OWNER_EMAIL: owner,
       STUDIO_ORIGIN: origin } = env;
     if (!teamOrigin.test(issuer ?? '') || !audience || !owner ||
-        origin !== 'https://studio.zanegiordano.com') return deny('runtime_config');
+        origin !== expectedOrigin) return deny('runtime_config');
     if (new URL(request.url).origin !== origin) return deny('request_origin');
 
     const token = request.headers.get('Cf-Access-Jwt-Assertion');

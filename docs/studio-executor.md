@@ -1,5 +1,7 @@
 # Studio executor: setup after owner approval
 
+For the first trial, follow the [repeatable staging setup and smoke test](studio-staging-test.md).
+
 PR B enables a single copy slot: the Personal homepage projects heading. Studio still saves all other requests for review. The executor cannot add files, edit markup, modify workflows, follow URLs from prompts, or run generated commands. The only model artifact is a plain-text replacement for the existing heading. The publisher independently rebuilds that patch from the pinned source. This is a bounded fallback, not a general Codex sandbox.
 
 The [Agents API session schema](https://developers.openai.com/api/reference/resources/beta/subresources/agents/subresources/sessions/methods/create) does not document a caller-configurable spend ceiling covering both agent model calls and hosted sandbox charges. Its [session budget error](https://developers.openai.com/api/docs/guides/agents-api/errors) does not establish such a ceiling. This slice uses a single tool-free [Responses request](https://developers.openai.com/api/reference/resources/responses/methods/create), plus an isolated Cloud Run validator. No Agents API or OpenAI sandbox entitlement is needed for the fallback. OpenAI project access has not been tested.

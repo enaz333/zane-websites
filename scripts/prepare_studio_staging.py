@@ -8,7 +8,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "https://studio-staging.zanegiordano.com"
 DATABASE = "zane-studio-staging"
-BUDGET = "419440"
+BUDGET = "262548"
 
 
 def prepare(args):

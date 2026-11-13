@@ -1,0 +1,71 @@
+name: Initialize Studio staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: Full reviewed main SHA to initialize in Studio staging
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloudflare-studio-staging
+  cancel-in-progress: false
+
+jobs:
+  initialize:
+    if: github.repository == 'enaz333/zane-websites' && github.ref == 'refs/heads/main' && github.ref_protected
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: cloudflare-studio-staging
+    steps:
+      - name: Require staging opt-in and reviewed commit
+        env:
+          STUDIO_STAGING_RELEASE_ENABLED: ${{ vars.STUDIO_STAGING_RELEASE_ENABLED }}
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          test "$STUDIO_STAGING_RELEASE_ENABLED" = true
+          test "$REVIEWED_SHA" = "$GITHUB_SHA"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Verify reviewed source without credentials
+        run: |
+          python3 scripts/validate.py
+          python3 scripts/projects.py validate
+          python3 scripts/studio_paths.py --check
+          python3 -m unittest discover -s tests -v
+          node --test tests/*.test.mjs
+          python3 scripts/release_studio.py dry-run
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+      - name: Verify the owner approved this environment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/release_studio_staging.py --verify-approval
+      - name: Initialize private Studio staging
+        env:
+          STUDIO_STAGING_RELEASE_ENABLED: ${{ vars.STUDIO_STAGING_RELEASE_ENABLED }}
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          STUDIO_STAGING_D1_ID: ${{ vars.STUDIO_STAGING_D1_ID }}
+          STUDIO_PRODUCTION_D1_ID: ${{ vars.STUDIO_PRODUCTION_D1_ID }}
+          STUDIO_STAGING_DEPLOY_TOKEN: ${{ secrets.STUDIO_STAGING_DEPLOY_TOKEN }}
+          STUDIO_STAGING_D1_TOKEN: ${{ secrets.STUDIO_STAGING_D1_TOKEN }}
+          ACCESS_TEAM_ORIGIN: ${{ secrets.STUDIO_STAGING_ACCESS_TEAM_ORIGIN }}
+          ACCESS_AUD: ${{ secrets.STUDIO_STAGING_ACCESS_AUD }}
+          STUDIO_OWNER_EMAIL: ${{ secrets.STUDIO_STAGING_OWNER_EMAIL }}
+        run: python3 scripts/release_studio_staging.py

@@ -63,13 +63,32 @@ def release_config(env):
     return base, runtime
 
 
+def wrangler_diagnostic(output):
+    """Report recognized errors without echoing remote text or config diffs."""
+    messages = (
+        ("Aborting the upload operation because of conflicts", "strict mode stopped a conflicting upload"),
+        ("differs from the remote configuration", "dashboard configuration differs from the release config"),
+        ("last updated via the script API", "the previous update used the script API"),
+        ("Unable to fetch bindings, routes, or services metadata", "could not read Worker metadata"),
+        ("Authentication error", "Cloudflare authentication failed"),
+        ("must have a valid `id` specified", "Cloudflare rejected a binding ID"),
+    )
+    details = [safe for marker, safe in messages if marker in output]
+    codes = list(dict.fromkeys(re.findall(r"\[code: ([0-9]{1,8})\]", output)))[:8]
+    if codes:
+        details.append("Cloudflare error codes " + ", ".join(codes))
+    return "; ".join(details) or "unrecognized diagnostic withheld"
+
+
 def wrangler(*args, env, quiet=True):
     result = subprocess.run(
         ["npx", "--no-install", "wrangler", *args], cwd=ROOT, env=env, timeout=240,
-        stdout=subprocess.DEVNULL if quiet else None, stderr=subprocess.DEVNULL if quiet else None,
+        stdout=subprocess.PIPE if quiet else None, stderr=subprocess.STDOUT if quiet else None,
+        encoding="utf-8", errors="replace",
     )
     if result.returncode:
-        raise ValueError(f"Wrangler {args[0]} failed (exit {result.returncode})")
+        detail = f": {wrangler_diagnostic(result.stdout or '')}" if quiet else ""
+        raise ValueError(f"Wrangler {args[0]} failed (exit {result.returncode}){detail}")
 
 
 class StudioCloudflare:

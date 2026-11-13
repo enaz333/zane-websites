@@ -116,11 +116,14 @@ class StudioStagingReleaseTests(unittest.TestCase):
     def test_refresh_uses_reviewed_base_and_deploys_only_disabled_dispatcher(self):
         worker = Mock()
         worker.active.return_value = PRODUCTION
-        worker.script.return_value = {"resources": {"bindings": [
-            {"type": "d1", "name": "DB", "database_id": STAGING},
-            {"type": "plain_text", "name": "STUDIO_STAGING_ID", "text": STAGING},
-            {"type": "plain_text", "name": "STUDIO_EXECUTION_ENABLED", "text": "false"},
-        ] + [{"type": "secret_text", "name": name} for name in release.DISPATCH_SECRETS]}}
+        prior = release.DISPATCH_CONNECTION | {
+            "STUDIO_STAGING_ID": STAGING, "STUDIO_BASE_SHA": "c" * 40, "STUDIO_EXECUTION_ENABLED": "false",
+            "STUDIO_RUN_MICROS": "262548", "STUDIO_MONTH_MICROS": "262548", "STUDIO_RATE_CARD": release.LUNA_RATE_CARD,
+        }
+        bindings = [{"type": "d1", "name": "DB", "database_id": STAGING}]
+        bindings.extend({"type": "plain_text", "name": key, "text": value} for key, value in prior.items())
+        bindings.extend({"type": "secret_text", "name": name} for name in release.DISPATCH_SECRETS)
+        worker.script.return_value = {"resources": {"bindings": bindings}}
         with tempfile.TemporaryDirectory() as directory:
             plan = Path(directory) / "plan"
             args = argparse.Namespace(base=BASE, database=STAGING, production_database=PRODUCTION, out=plan)
@@ -135,6 +138,11 @@ class StudioStagingReleaseTests(unittest.TestCase):
                 deploy.assert_called_once_with(worker, plan / "dispatcher.json", {}, BASE, STAGING,
                                                previous=PRODUCTION, rate_card=release.LUNA_RATE_CARD,
                                                retained_secrets=release.DISPATCH_SECRETS)
+                deploy.reset_mock()
+                bindings.append({"type": "plain_text", "name": "UNREVIEWED", "text": "fixture"})
+                with self.assertRaisesRegex(ValueError, "reviewed refresh baseline"):
+                    release.refresh_dispatcher(worker, plan, {}, {}, STAGING, PRODUCTION, BASE)
+                deploy.assert_not_called()
             config = json.loads((plan / "dispatcher.json").read_text())
             self.assertEqual(config["vars"], {
                 **release.DISPATCH_CONNECTION,

@@ -169,7 +169,10 @@ def deploy_worker(worker, config, env, base, staging, runtime=None, *, previous=
         path.touch(mode=0o600)
         path.write_text(json.dumps(runtime))
         flags = ["--secrets-file", str(path)]
-    wrangler("deploy", "--config", str(config), "--strict", "--no-autoconfig", "--tag", base,
+    # Refresh validates the exact active configuration and allows the reviewed
+    # base SHA update after dashboard changes. Other releases stay strict.
+    strict = () if worker.worker == DISPATCH and previous is not None else ("--strict",)
+    wrangler("deploy", "--config", str(config), *strict, "--no-autoconfig", "--tag", base,
              *flags, env=env | {"WRANGLER_OUTPUT_FILE_PATH": str(output)})
     (entry,) = [item for line in output.read_text().splitlines() if (item := json.loads(line))["type"] == "deploy"]
     version = entry["version_id"]
@@ -250,6 +253,16 @@ def refresh_dispatcher(worker, plan, d1_env, worker_env, staging, expected, base
     if dispatcher["vars"]["STUDIO_BASE_SHA"] != base:
         raise ValueError("Dispatcher config must match the reviewed main SHA")
     dispatcher["vars"]["STUDIO_RATE_CARD"] = LUNA_RATE_CARD
+    # Only the base pin may differ on a connected dispatcher. Also accept the
+    # original disabled deployment, before the connection settings were added.
+    prior_base = variables.get("STUDIO_BASE_SHA", "")
+    prior = dispatcher["vars"] | {"STUDIO_BASE_SHA": prior_base}
+    legacy = {key: value for key, value in prior.items()
+              if key not in DISPATCH_CONNECTION and key != "STUDIO_RATE_CARD"}
+    legacy.update(STUDIO_RUN_MICROS="419440", STUDIO_MONTH_MICROS="419440")
+    if not SHA.fullmatch(prior_base) or variables not in (prior, legacy):
+        raise ValueError("Existing dispatcher variables differ from the reviewed refresh baseline")
+
     config.write_text(json.dumps(dispatcher))
     require_inert_dispatcher(worker)
     if worker.active() != expected:

@@ -24,3 +24,22 @@ Publishing is serialized. Each automatic run selects projects from its push rang
 ## Local verification
 
 The registry validated all five existing projects. The Python tests covered scaffolding, disabled entries, dependency ordering, commit-range selection, and simulated Cloudflare conflicts and attachment. Wrangler dry runs passed for all five projects and a freshly scaffolded project. The two workflows were statically checked with actionlint 1.7.12, suppressing only its known false positive for GitHub’s documented [concurrency queue setting](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency). GitHub execution and live Cloudflare attachment remain unverified.
+
+## First launch on workers.dev
+
+On the existing `cloudflare-production` GitHub environment, set the variable `CLOUDFLARE_WORKERS_DEV_SUBDOMAIN` to the account label shown under Cloudflare **Workers & Pages → Overview → workers.dev subdomain**. Keep the existing required reviewer and main-only branch policy. Confirm `CLOUDFLARE_ACCOUNT_ID` is present as an environment variable.
+
+After merging the staging workflow, run **Actions → Publish Workers → Run workflow** from protected `main` with target **staging** and project **all**, then approve the deployment for that commit. Staging publishes every enabled registry entry under run-specific Worker names and records the URLs after HTTP checks pass. Temporary configs bind personal to the temporary Photo Notes Worker, and Club redirects stay on the temporary destinations. The staging job uses the Workers token. It supplies no custom-domain token and never attaches a custom domain. Delete temporary Workers from Cloudflare after testing and the rollback window.
+
+## Proposed production routing for separate approval
+
+| Host or path | Proposed destination |
+| --- | --- |
+| `zanegiordano.com` | Attach a Custom Domain to `zane-personal` |
+| `www.zanegiordano.com` | Preserve the www entry point with a separate, path-and-query-preserving redirect to the apex after confirming current rules |
+| `acl.zanegiordano.com` | Attach a Custom Domain to `zane-acl`, serving `/acl/` |
+| `coachella.zanegiordano.com` | Attach a Custom Domain to `zane-coachella`, serving `/coachella/` |
+| `zanegiordano.com/PhotoNotes` | Personal Worker's `PHOTO_NOTES` binding to `zane-photo-notes`; no separate DNS record |
+| `coolstrangersclub.com` and www | Retain the current Netlify connection; consider Club cutover after staging, destination verification and a printed QR scan |
+
+Before proposing specific record replacements, export the current Cloudflare DNS records and inspect Redirect Rules for the three parked destinations. Public Cloudflare edge IPs do not identify the origin records. If restoring a Netlify site, use the exact values from its Netlify Domain management page or a verified pre-cutover DNS export. Capture the exact printed QR URL including case, slash and query before approving the final Club redirect.

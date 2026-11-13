@@ -40,3 +40,5 @@ jobs:
             output=$(mktemp -d "$RUNNER_TEMP/worker.XXXXXX")
             npx --no-install wrangler deploy --dry-run --config "$config" --outdir "$output"
           done < "$RUNNER_TEMP/worker-configs"
+      - name: Dry-run temporary Worker configurations
+        run: python3 scripts/stage_workers.py --subdomain example --run-id 1 --dry-run

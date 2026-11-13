@@ -139,3 +139,41 @@ test('persistent history is owner scoped; retries and concurrent changes are saf
   assert.equal((await api('/api/tasks', { body: app, auth })).status, 201);
   assert.equal((await api('/api/tasks', { body: edit })).status, 201);
 });
+
+test('Access reports only the failed stage and keeps the HTTP denial generic', async () => {
+  const stages = [];
+  const authenticate = createAccessVerifier(async () => Response.json({ keys: [jwk] }),
+    (...args) => stages.push(args));
+  const app = createStudio(authenticate);
+  const cases = [
+    ['runtime_config', request('/'), { ...config, ACCESS_AUD: '' }],
+    ['request_origin', new Request('https://other.example/'), config],
+    ['assertion_missing', request('/', { auth: '' }), config],
+    ['jwt_format', request('/', { auth: 'malformed' }), config],
+    ['issuer', request('/', { auth: await token({ iss: 'https://other.cloudflareaccess.com' }) }), config],
+    ['token_type', request('/', { auth: await token({ type: 'org' }) }), config],
+    ['audience', request('/', { auth: await token({ aud: ['other'] }) }), config],
+    ['owner_email', request('/', { auth: await token({ email: 'other@example.com' }) }), config],
+    ['token_time', request('/', { auth: await token({ exp: 1 }) }), config],
+    ['subject', request('/', { auth: await token({ sub: '' }) }), config],
+    ['signing_key', request('/', { auth: await token({}, { kid: 'unknown' }) }), config],
+    ['signature', request('/', { auth: good.replace(/\.[^.]+$/, '.aabbcc') }), config],
+  ];
+  for (const [stage, req, env] of cases) {
+    const response = await app.fetch(req, env);
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: 'Access denied.' });
+    assert.deepEqual(stages.pop(), [stage]);
+  }
+  for (const [stage, keyResponse] of [
+    ['jwks_fetch', new Response(null, { status: 503 })],
+    ['jwks_format', Response.json({ keys: {} })],
+    ['signing_key_import', Response.json({ keys: [{ ...jwk, n: undefined }] })],
+  ]) {
+    const verifier = createAccessVerifier(async () => keyResponse, (...args) => stages.push(args));
+    assert.equal(await verifier(request('/'), config), null);
+    assert.deepEqual(stages.pop(), [stage]);
+  }
+  assert.equal(await authenticate(request('/'), config), issuer + '#owner-id');
+  assert.deepEqual(stages, []);
+});

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test, before, after } from 'node:test';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import production, { createStudio } from '../workers/studio.mjs';
+import { claimExecution, transitionExecution, expireExecutions } from '../workers/studio-execution.mjs';
 import { createAccessVerifier } from '../workers/studio-auth.mjs';
 
 const origin = 'https://studio.zanegiordano.com';
@@ -33,8 +34,10 @@ let mf, db;
 before(async () => {
   mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ modules: true, script: 'export default { fetch() {} }', d1Databases: ['DB'] }] }));
   db = await mf.getD1Database('DB');
-  const migration = await readFile(new URL('../sites/studio/migrations/0001_tasks.sql', import.meta.url), 'utf8');
-  await db.batch(migration.trim().split(/;\s*(?=CREATE )/).map(sql => db.prepare(sql)));
+  for (const name of ['0001_tasks.sql', '0002_execution.sql']) {
+    const migration = await readFile(new URL(`../sites/studio/migrations/${name}`, import.meta.url), 'utf8');
+    await db.batch(migration.trim().split(/;\s*(?=CREATE )/).map(sql => db.prepare(sql)));
+  }
 });
 after(async () => mf?.dispose());
 
@@ -225,4 +228,54 @@ test('Workers runtime retrieves keys and verifies a signed Access token', async 
   } finally {
     await runtime.dispose();
   }
+});
+
+test('enabled queue is durable, prioritizes ASAP, fences claims and audits results', async () => {
+  const queued = createStudio(verify, { queueEdits: true });
+  const call = (path, options) => queued.fetch(request(path, options), { ...config, DB: db });
+  const submit = async (body, key) => (await (await call('/api/tasks', { body, key })).json()).task;
+  const key = crypto.randomUUID();
+  const economy = await submit(edit, key);
+  assert.equal(economy.status, 'queued');
+  assert.equal((await submit(edit, key)).id, economy.id);
+  const urgent = await submit({ ...edit, asap: true });
+  const now = new Date(Date.now() + 1000);
+  const jobs = await Promise.all([claimExecution(db, now), claimExecution(db, now)]);
+  assert.deepEqual(new Set(jobs.map(job => job.id)), new Set([urgent.id, economy.id]));
+  const job = jobs.find(row => row.id === urgent.id);
+  assert.equal(await claimExecution(db, now), null);
+  assert.equal((await call(`/api/tasks/${urgent.id}/cancel`, { method: 'POST' })).status, 409);
+  assert.equal(await transitionExecution(db, job.id, 'wrong-claim', 'validating', {}, now), false);
+  assert.equal(await transitionExecution(db, job.id, job.claim, 'pr_ready', { prNumber: 123 }, now), false);
+  assert.equal(await transitionExecution(db, job.id, job.claim, 'validating', {}, now), true);
+  assert.equal(await transitionExecution(db, job.id, job.claim, 'pr_ready', { prNumber: 123 }, now), true);
+  const later = new Date(now.getTime() + 15 * 60_000);
+  const other = jobs.find(row => row.id === economy.id);
+  assert.equal(await transitionExecution(db, other.id, other.claim, 'validating', {}, later), false);
+  await expireExecutions(db, later);
+  const { tasks } = await (await call('/api/tasks')).json();
+  const ready = tasks.find(row => row.id === urgent.id);
+  assert.equal(ready.pr_number, 123);
+  assert.equal(ready.check_status, 'passed');
+  assert.equal(ready.status, 'pr_ready');
+  assert.equal(ready.claim_id, undefined);
+  assert.equal(tasks.find(row => row.id === economy.id).failure_code, 'lease_expired');
+  const audit = await db.prepare('SELECT state FROM execution_events WHERE task_id = ? ORDER BY id').bind(job.id).all();
+  assert.deepEqual(audit.results.map(row => row.state), ['queued', 'running', 'validating', 'pr_ready']);
+
+  const pending = await submit(edit);
+  const cancelled = await call(`/api/tasks/${pending.id}/cancel`, { method: 'POST' });
+  assert.equal((await cancelled.json()).task.status, 'cancelled');
+  assert.equal(await claimExecution(db, new Date(later.getTime() + 1000)), null);
+});
+
+test('an eligible ASAP request is claimed before an older economy request', async () => {
+  const queued = createStudio(verify, { queueEdits: true });
+  const submit = async body => (await (await queued.fetch(request('/api/tasks', { body }),
+    { ...config, DB: db })).json()).task;
+  const economy = await submit(edit);
+  const urgent = await submit({ ...edit, asap: true });
+  const now = new Date(Date.now() + 1000);
+  assert.equal((await claimExecution(db, now)).id, urgent.id);
+  assert.equal((await claimExecution(db, now)).id, economy.id);
 });

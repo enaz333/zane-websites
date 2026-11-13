@@ -70,7 +70,11 @@ export async function publish(run, source, token, fetcher = fetch, { canPublish 
   }
   if (!canPublish()) return null;
   // Avoid testing against one tree and proposing against a different main.
-  const mainMatches = async () => (await get('/git/ref/heads/main')).object?.sha === run.base_sha;
+  const mainMatches = async () => {
+    const revision = (await get('/git/ref/heads/main')).object?.sha;
+    if (!sha(revision)) throw new Error('Invalid main ref');
+    return revision === run.base_sha;
+  };
   if (!await mainMatches()) return null;
   const parent = await get('/git/commits/' + run.base_sha);
   if (!sha(parent?.tree?.sha)) throw new Error('Invalid parent tree');

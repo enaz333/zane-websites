@@ -153,6 +153,15 @@ test('dispatch reserves once, skips cancelled work and recovers a draft after a 
       return Response.json([]);
     });
   assert.equal(stale, null);
+  const run = { base_sha: base, task_id: task.id, replacement: 'Selected projects' };
+  await assert.rejects(publish(run, source, 'installation-fixture', async (_url, options) => {
+    assert.equal(options.method, 'GET');
+    return Response.json({ message: 'Incomplete list' });
+  }, { canPublish: () => false }), /Invalid pull request list/);
+  await assert.rejects(publish(run, source, 'installation-fixture', async (url, options) => {
+    assert.equal(options.method, 'GET');
+    return Response.json(url.endsWith('/git/ref/heads/main') ? {} : []);
+  }), /Invalid main ref/);
   const date = new Date('2035-01-10T12:00:00Z');
   const now = () => new Date(date);
   const step = () => tick(env, { fetcher, now });

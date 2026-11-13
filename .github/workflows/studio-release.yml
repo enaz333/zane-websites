@@ -1,0 +1,72 @@
+name: Release private Studio
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Deploy Studio or restore a recorded Studio Worker version
+        required: true
+        type: choice
+        options: [deploy, rollback]
+      expected_version:
+        description: Current Studio Worker version UUID, or none for first deploy
+        required: true
+        type: string
+      rollback_version:
+        description: Known-good Studio Worker version UUID (rollback only)
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-studio-production
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'enaz333/zane-websites' && github.ref == 'refs/heads/main' && github.ref_protected
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: cloudflare-studio-production
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - name: Require owner opt-in
+        env:
+          STUDIO_RELEASE_ENABLED: ${{ vars.STUDIO_RELEASE_ENABLED }}
+        run: test "$STUDIO_RELEASE_ENABLED" = true
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Verify Studio without credentials
+        run: |
+          python3 scripts/validate.py
+          python3 scripts/projects.py validate
+          python3 scripts/studio_paths.py --check
+          python3 -m unittest discover -s tests -v
+          node --test tests/*.test.mjs
+          python3 scripts/release_studio.py dry-run
+      - name: Apply reviewed Studio release
+        env:
+          STUDIO_MODE: ${{ inputs.mode }}
+          STUDIO_EXPECTED_VERSION: ${{ inputs.expected_version }}
+          STUDIO_ROLLBACK_VERSION: ${{ inputs.rollback_version }}
+          STUDIO_RELEASE_ENABLED: ${{ vars.STUDIO_RELEASE_ENABLED }}
+          STUDIO_ORIGIN: ${{ vars.STUDIO_ORIGIN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STUDIO_CLOUDFLARE_API_TOKEN }}
+          STUDIO_D1_DATABASE_ID: ${{ secrets.STUDIO_D1_DATABASE_ID }}
+          ACCESS_TEAM_ORIGIN: ${{ secrets.ACCESS_TEAM_ORIGIN }}
+          ACCESS_AUD: ${{ secrets.ACCESS_AUD }}
+          STUDIO_OWNER_EMAIL: ${{ secrets.STUDIO_OWNER_EMAIL }}
+        run: python3 scripts/release_studio.py "$STUDIO_MODE"

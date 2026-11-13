@@ -1,5 +1,7 @@
 # Protected release workflow
 
+Private Studio is excluded from these workflows. See the [Studio release checklist](studio-release.md) for its separate manual workflow and owner approvals.
+
 Use the same existing Cloudflare account ID in all three GitHub environments. Configure these environments before the first approved dispatch. Restrict all three to main, require an owner reviewer and disable administrator bypass.
 
 | Environment | Variables | Secrets |

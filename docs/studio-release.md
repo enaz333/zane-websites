@@ -68,3 +68,5 @@ After deploying the diagnostics, open **Workers & Pages → zane-studio → Obse
 | `jwks_fetch`, `jwks_format`, `signing_key`, `signing_key_import`, `signature` | Check the configured team's public `/cdn-cgi/access/certs` endpoint for a reachable JSON key set with RSA signing keys. Retry after the one-minute key cache expires if keys recently rotated. |
 
 Keep JWTs, cookie values, full log events, and account settings out of PRs. A fixed stage name is sufficient for follow-up.
+
+The release probe sends the repository's named smoke-check User-Agent. Cloudflare returned error 1010 for Python urllib's default User-Agent during testing. A 403 or a Cloudflare interstitial challenge still fails the release check. If the named probe fails from GitHub Actions, check Cloudflare Security Events for the Studio hostname at the run time, and confirm the Access team origin in the protected environment.

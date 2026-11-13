@@ -16,6 +16,22 @@ AFTER = "b0000000-0000-4000-8000-000000000000"
 DB = studio.FIXTURE["STUDIO_D1_DATABASE_ID"]
 
 
+class WranglerDiagnosticsTests(unittest.TestCase):
+    def test_failure_reports_safe_messages_and_codes_only(self):
+        output = ("\x1b[31mAborting the upload operation because of conflicts\x1b[0m\n"
+                  "Authentication error: secret-fixture [code: 10000]\n"
+                  "Authorization: Bearer secret-fixture\n::warning::secret-fixture")
+        with patch.object(studio.subprocess, "run", return_value=Mock(returncode=1, stdout=output)):
+            with self.assertRaises(ValueError) as error:
+                studio.wrangler("deploy", env={"CLOUDFLARE_API_TOKEN": "secret-fixture"})
+        self.assertEqual(str(error.exception), "Wrangler deploy failed (exit 1): "
+                         "strict mode stopped a conflicting upload; Cloudflare authentication failed; "
+                         "Cloudflare error codes 10000")
+
+    def test_unknown_output_is_withheld(self):
+        self.assertEqual(studio.wrangler_diagnostic("unknown secret-fixture"), "unrecognized diagnostic withheld")
+
+
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
         self.config, self.runtime = studio.release_config(studio.FIXTURE)

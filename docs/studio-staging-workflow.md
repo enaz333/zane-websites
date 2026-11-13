@@ -102,3 +102,11 @@ deploys the reviewed values. Wrangler retains existing encrypted secrets.
 The refresh checks the names of the existing approved secret bindings and
 verifies that the new version retains the same names. Both budget variables are `262548`, and the rate card is
 `gpt-6-luna:standard:0.10:0.01:0.125:0.50:0.20:0.02:0.25:0.75`.
+
+If a disabled refresh fails at Wrangler upload, check the sanitized error in
+the Actions log and confirm the active dispatcher version in Cloudflare before
+starting another run. Wrangler strict mode can reject a dashboard-managed
+version when the reviewed refresh changes its base SHA. The refresh validates
+the existing disabled settings and exact version before allowing that change.
+Keep the recorded previous version for recovery. If the failed run created or
+activated a different version, inspect it before approving any further action.

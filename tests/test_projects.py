@@ -83,6 +83,41 @@ class RegistryTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, reason):
                     load(self.root)
 
+    def test_project_documentation_does_not_select_workers(self):
+        self.git("init", "-q")
+        before = self.commit()
+        for slug in load(self.root):
+            site = self.root / "sites" / slug
+            (site / "AGENTS.md").write_text("Updated instructions")
+            (site / "README.md").write_text("Updated overview")
+            (site / "docs").mkdir(exist_ok=True)
+            (site / "docs/operations.md").write_text("Internal runbook")
+        self.assertEqual(affected(load(self.root), before, self.commit(), self.root), set())
+
+    def test_runtime_inputs_select_workers_even_with_documentation_changes(self):
+        self.git("init", "-q")
+        before = self.commit()
+        (self.root / "sites/acl/public/README.md").write_text("Published markdown asset")
+        runtime = self.commit()
+        self.assertEqual(affected(load(self.root), before, runtime, self.root), {"acl"})
+
+        (self.root / "sites/acl/AGENTS.md").write_text("Updated instructions")
+        site = self.root / "sites/coachella"
+        (site / "src").mkdir()
+        (site / "src/message.md").write_text("Text consumed by the Worker")
+        config = parse((site / "wrangler.json").read_text())
+        config["compatibility_date"] = "2026-11-11"
+        (site / "wrangler.json").write_text(json.dumps(config))
+        self.assertEqual(affected(load(self.root), runtime, self.commit(), self.root), {"coachella"})
+
+    def test_root_toolchain_change_selects_enabled_workers(self):
+        self.git("init", "-q")
+        before = self.commit()
+        (self.root / "package-lock.json").write_text("{}")
+        registry = load(self.root)
+        self.assertEqual(affected(registry, before, self.commit(), self.root),
+                         {slug for slug, entry in registry.items() if entry["enabled"]})
+
     def test_changes_select_only_affected_enabled_projects(self):
         self.git("init", "-q")
         before = self.commit()

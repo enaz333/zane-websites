@@ -1,6 +1,6 @@
 # Zane Studio
 
-Studio is a private workspace for requesting changes to a website or proposing a new page or independent app. Edit captures a registry target, optional page and description. Add New captures a title, proposed apex slug and build type. Both default to economy and record the optional ASAP preference. Activity shows saved requests, with cancellation and paginated history. Production submission saves a request and does not start a job. Local preview queues new Edit requests to exercise the MVP 1B storage and Activity changes.
+Studio is a private workspace for requesting changes to a website or proposing a new page or independent app. Edit captures a registry target, optional page and description. Add New captures a title, proposed apex slug and build type. Both default to economy and record the optional ASAP preference. Activity shows saved requests, with cancellation and paginated history. Production submission saves a request and does not start a job. Local preview queues eligible Personal homepage Edit requests to exercise the MVP 1B storage and Activity changes.
 
 ## Preview locally
 
@@ -37,6 +37,8 @@ The [generated route inventory](../workers/studio-paths.json) checks repository 
 Studio stays disabled in the public registry. The [private release checklist](studio-release.md) covers the dedicated GitHub environment, Cloudflare Access and D1, owner-approved deployment, separate hostname attachment and recovery. The existing `/admin` reservation stays inactive.
 
 ## MVP 1B evaluation and costs
+
+[PR B executor setup](studio-executor.md) supersedes the provider and activation proposals below.
 
 **PR A: D1 queue and Activity.** Migration 0002 adds execution rows and transition events alongside intake. An enabled Edit submission inserts both rows in one D1 batch. Old requests and Add New stay intake-only. The internal claim operation is atomic, prioritizes ASAP among eligible rows, and fences updates with a 15-minute claim ID and expiry. Queued work can be cancelled before claim; expired claims fail without automatic re-execution. Activity shows only stored state, typed failures, timestamps, and a link derived from a verified PR number when supplied by a future trusted publisher. There is no consumer or simulated progress. Queue intake is enabled only in the loopback entry point.
 

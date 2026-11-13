@@ -1,0 +1,8 @@
+{
+  "name": "zane-studio-dispatch-disabled",
+  "main": "../../../workers/studio-dispatch-worker.mjs",
+  "compatibility_date": "2026-11-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false
+}

@@ -70,6 +70,7 @@
     "watch": [
       "workers/studio.mjs",
       "workers/studio-auth.mjs",
+      "workers/studio-copy.mjs",
       "workers/studio-paths.json"
     ]
   }

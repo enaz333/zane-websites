@@ -94,11 +94,18 @@ function taskRow(task) {
   if (destination) row.append(node('small', destination));
   row.append(node('small', `${status} · ${task.asap ? 'As soon as possible' : 'Economy preferred'} · ${formatTime(task.updated_at)}`));
   row.append(node('p', task.description));
-  const detail = progress[task.status] || failures[task.failure_code];
+  const phase = {
+    prepare: 'Loading the reviewed source revision.',
+    model_sent: 'Waiting for the model response.',
+    check: 'Waiting for repository checks.',
+    publish: 'Preparing or checking for the draft pull request.',
+  };
+  const detail = phase[task.execution_phase] || progress[task.status] || failures[task.failure_code];
   if (detail) row.append(node('small', detail));
   if (task.started_at) row.append(node('small', `Started ${formatTime(task.started_at)}`));
   if (task.finished_at) row.append(node('small', `Finished ${formatTime(task.finished_at)}`));
-  if (task.check_status) row.append(node('small', task.check_status === 'passed' ? 'Checks passed' : 'Checks failed'));
+  if (task.check_summary) row.append(node('small', task.check_summary));
+  else if (task.check_status) row.append(node('small', task.check_status === 'passed' ? 'Checks passed' : 'Checks failed'));
   if (task.status === 'pr_ready' && Number.isSafeInteger(task.pr_number) && task.pr_number > 0) {
     const link = node('a', `Open pull request #${task.pr_number}`);
     link.href = `https://github.com/enaz333/zane-websites/pull/${task.pr_number}`;

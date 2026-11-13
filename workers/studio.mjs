@@ -1,4 +1,5 @@
 import projects from '../projects.json' with { type: 'json' };
+import { eligible } from './studio-copy.mjs';
 import paths from './studio-paths.json' with { type: 'json' };
 import { createAccessVerifier } from './studio-auth.mjs';
 
@@ -8,8 +9,10 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const fields = 't.id, t.kind, t.project, t.title, t.page, t.slug, t.description, t.asap, t.created_at';
 const taskView = `SELECT ${fields}, COALESCE(e.state, t.status) AS status,
   COALESCE(e.updated_at, t.updated_at) AS updated_at, e.started_at, e.finished_at,
-  e.pr_number, e.check_status, e.failure_code, t.request_hash
-  FROM tasks t LEFT JOIN task_executions e ON e.task_id = t.id`;
+  e.pr_number, e.check_status, e.failure_code, d.check_summary,
+  CASE WHEN d.phase IN ('prepare', 'model_sent', 'check', 'publish') THEN d.phase END AS execution_phase, t.request_hash
+  FROM tasks t LEFT JOIN task_executions e ON e.task_id = t.id
+  LEFT JOIN execution_dispatch d ON d.task_id = t.id`;
 const allowedAssets = new Set(['/', '/index.html', '/studio.css', '/studio.js']);
 const headers = {
   'Cache-Control': 'private, no-store',
@@ -118,9 +121,10 @@ async function submit(request, db, owner, queueEdits) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`)
       .bind(id, owner, key, hash, task.kind, task.project, task.title, task.page, task.slug,
         task.description, Number(task.asap), now, now),
-    ...(queueEdits && task.kind === 'edit' ? [
+    ...(queueEdits && eligible(task) ? [
       db.prepare(`INSERT INTO task_executions (task_id, priority, available_at, updated_at)
-        SELECT id, asap, created_at, created_at FROM tasks WHERE id = ?`).bind(id),
+        SELECT id, asap, ?, created_at FROM tasks WHERE id = ?`)
+        .bind(new Date(Date.parse(now) + (task.asap ? 0 : 15 * 60_000)).toISOString(), id),
     ] : []),
     db.prepare(`${taskView} WHERE t.owner_id = ? AND t.request_key = ?`)
       .bind(owner, key),
@@ -170,7 +174,7 @@ export function createStudio(authenticate, { queueEdits = false } = {}) {
           const tasks = results.slice(0, 30).map(present);
           return json({ tasks, next: results.length > 30 ? tasks.at(-1).id : null });
         }
-        if (path === '/api/tasks' && method === 'POST') return await submit(request, db, owner, queueEdits);
+        if (path === '/api/tasks' && method === 'POST') return await submit(request, db, owner, queueEdits || env.STUDIO_QUEUE_ENABLED === 'true');
         if (cancel && method === 'POST') {
           const [, result] = await db.batch([
             db.prepare(`UPDATE tasks SET status = 'cancelled', updated_at = ?

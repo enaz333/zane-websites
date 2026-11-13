@@ -11,5 +11,7 @@ COPY runner/check-server.mjs /runner/sites/studio/executor/check-server.mjs
 COPY runner/studio-copy.mjs /runner/workers/studio-copy.mjs
 ARG STUDIO_CHECK_BASE
 ENV STUDIO_CHECK_BASE=${STUDIO_CHECK_BASE}
+RUN groupadd --gid 65532 studio-validator \
+    && useradd --uid 65532 --gid 65532 --create-home studio-validator
 USER 65532:65532
 CMD ["node", "/runner/sites/studio/executor/check-server.mjs"]

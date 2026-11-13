@@ -17,8 +17,10 @@ address=$(docker port "$container" 8080/tcp)
 probe() {
   curl --silent --show-error --max-time 300 --output "$context/reply" --write-out '%{http_code}' "$@"
 }
-test "$(probe --retry 10 --retry-connrefused --retry-delay 1 -X POST "http://$address/check")" = 403
-test "$(probe -H "Authorization: Bearer $fixture" -d "{\"base\":\"$base\",\"replacement\":\"<b>no</b>\"}" "http://$address/check")" = 400
-test "$(probe -H "Authorization: Bearer $fixture" -d "{\"base\":\"$base\",\"replacement\":\"Studio validator smoke test\"}" "http://$address/check")" = 200
+test "$(probe --retry 10 --retry-all-errors --retry-delay 1 -X POST "http://$address/check")" = 403
+invalid=$(printf '{"base":"%s","replacement":"<b>no</b>"}' "$base")
+valid=$(printf '{"base":"%s","replacement":"Studio validator smoke test"}' "$base")
+test "$(probe -H "Authorization: Bearer $fixture" -d "$invalid" "http://$address/check")" = 400
+test "$(probe -H "Authorization: Bearer $fixture" -d "$valid" "http://$address/check")" = 200
 node -e 'const x=JSON.parse(require("node:fs").readFileSync(process.argv[1])); if (x.passed !== true || x.base !== process.argv[2] || !/^[a-f0-9]{64}$/.test(x.digest)) process.exit(1)' "$context/reply" "$base"
 printf '%s\n' "$image"

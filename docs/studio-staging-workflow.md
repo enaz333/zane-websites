@@ -96,6 +96,9 @@ D1 marker.
 
 The refresh deploys only the dispatcher. It uses the existing staging D1
 binding and reads the marker without applying migrations. The dispatcher has
-execution disabled, no task UUID, no AI credentials, and no public endpoints
-or cron. Both budget variables are `262548`, and the rate card is
+execution disabled, no task UUID, and no public endpoints or cron. The
+generator declares the validator origin and both GitHub App IDs so Wrangler
+deploys the reviewed values. Wrangler retains existing encrypted secrets.
+The refresh checks the names of the existing approved secret bindings and
+verifies that the new version retains the same names. Both budget variables are `262548`, and the rate card is
 `gpt-6-luna:standard:0.10:0.01:0.125:0.50:0.20:0.02:0.25:0.75`.

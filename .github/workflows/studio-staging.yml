@@ -12,7 +12,7 @@ on:
         type: boolean
         default: false
       refresh_dispatcher_version:
-        description: Active dispatcher version UUID to replace with the disabled Luna release (blank for other modes)
+        description: Active dispatcher version UUID for a disabled refresh that retains approved secrets (blank for other modes)
         type: string
 
 permissions:

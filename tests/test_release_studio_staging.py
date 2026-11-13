@@ -120,7 +120,7 @@ class StudioStagingReleaseTests(unittest.TestCase):
             {"type": "d1", "name": "DB", "database_id": STAGING},
             {"type": "plain_text", "name": "STUDIO_STAGING_ID", "text": STAGING},
             {"type": "plain_text", "name": "STUDIO_EXECUTION_ENABLED", "text": "false"},
-        ]}}
+        ] + [{"type": "secret_text", "name": name} for name in release.DISPATCH_SECRETS]}}
         with tempfile.TemporaryDirectory() as directory:
             plan = Path(directory) / "plan"
             args = argparse.Namespace(base=BASE, database=STAGING, production_database=PRODUCTION, out=plan)
@@ -133,13 +133,33 @@ class StudioStagingReleaseTests(unittest.TestCase):
                 release.refresh_dispatcher(worker, plan, {}, {}, STAGING, PRODUCTION, BASE)
                 marker.assert_called_once_with(plan, {}, STAGING)
                 deploy.assert_called_once_with(worker, plan / "dispatcher.json", {}, BASE, STAGING,
-                                               previous=PRODUCTION, rate_card=release.LUNA_RATE_CARD)
+                                               previous=PRODUCTION, rate_card=release.LUNA_RATE_CARD,
+                                               retained_secrets=release.DISPATCH_SECRETS)
             config = json.loads((plan / "dispatcher.json").read_text())
             self.assertEqual(config["vars"], {
+                **release.DISPATCH_CONNECTION,
                 "STUDIO_BASE_SHA": BASE, "STUDIO_STAGING_ID": STAGING, "STUDIO_EXECUTION_ENABLED": "false",
                 "STUDIO_RUN_MICROS": "262548", "STUDIO_MONTH_MICROS": "262548",
                 "STUDIO_RATE_CARD": release.LUNA_RATE_CARD,
             })
+
+    def test_deployed_version_must_retain_expected_secret_names(self):
+        worker = Mock()
+        worker.script.return_value = {"id": PRODUCTION, "annotations": {"workers/tag": BASE},
+                                      "resources": {"bindings": []}}
+        bindings = worker.script.return_value["resources"]["bindings"]
+        bindings.append({"type": "d1", "name": "DB", "database_id": STAGING})
+        variables = release.DISPATCH_CONNECTION | {
+            "STUDIO_STAGING_ID": STAGING, "STUDIO_BASE_SHA": BASE, "STUDIO_EXECUTION_ENABLED": "false",
+            "STUDIO_RUN_MICROS": "262548", "STUDIO_MONTH_MICROS": "262548", "STUDIO_RATE_CARD": release.LUNA_RATE_CARD,
+        }
+        bindings.extend({"type": "plain_text", "name": key, "text": value} for key, value in variables.items())
+        bindings.extend({"type": "secret_text", "name": name} for name in release.DISPATCH_SECRETS)
+        options = {"rate_card": release.LUNA_RATE_CARD, "retained_secrets": release.DISPATCH_SECRETS}
+        release.verify_worker_version(worker, PRODUCTION, BASE, STAGING, **options)
+        bindings.pop()
+        with self.assertRaisesRegex(ValueError, "unexpected secret bindings"):
+            release.verify_worker_version(worker, PRODUCTION, BASE, STAGING, **options)
 
     def test_refresh_waits_for_new_version_while_baseline_is_visible(self):
         worker = Mock()

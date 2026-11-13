@@ -92,7 +92,7 @@ test('Personal redirects exact registered short URLs and preserves the query', a
                    `https://${slug}.zanegiordano.com/${slug}/?q=a%2Bb&tag=one&tag=two`);
     }
   }
-  for (const path of ['/unknown', '/acl/extra', '/ACL', '/acl//', '/api', '/BuildFest']) {
+  for (const path of ['/unknown', '/acl/extra', '/ACL', '/acl//', '/api', '/BuildFest', '/studio', '/admin', '/admin/']) {
     assert.equal((await personal.fetch(request(path), env)).status, 404);
   }
   const staged = await personal.fetch(request('/acl'), {

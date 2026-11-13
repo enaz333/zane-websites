@@ -1,0 +1,13 @@
+{
+  "status": "Studio trial; proposed, not an ecosystem standard",
+  "studio": {
+    "color": {
+      "paper": "#f6f5ef", "surface": "#fffefa", "ink": "#262722",
+      "muted": "#575a50", "line": "#d9d9ce", "accent": "#5145cc", "focus": "#4033b4"
+    },
+    "type": { "display": "Georgia, serif", "body": "system-ui, sans-serif" },
+    "spaceRem": [0.25, 0.5, 1, 1.5, 2],
+    "controlMinPx": 44,
+    "maxContentRem": 64
+  }
+}

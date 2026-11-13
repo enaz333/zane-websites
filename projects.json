@@ -60,5 +60,17 @@
     ],
     "short_path": "/PhotoNotes",
     "canonical_url": "https://zanegiordano.com/PhotoNotes"
+  },
+  "studio": {
+    "canonical_url": "https://studio.zanegiordano.com/",
+    "depends_on": [],
+    "enabled": false,
+    "short_path": "/studio",
+    "subdomain": null,
+    "watch": [
+      "workers/studio.mjs",
+      "workers/studio-auth.mjs",
+      "workers/studio-paths.json"
+    ]
   }
 }

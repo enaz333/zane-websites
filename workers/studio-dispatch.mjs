@@ -88,7 +88,44 @@ async function finish(db, run, now, failure, number = null) {
   ]);
 }
 
-async function validate(env, run, fetcher) {
+// Only fixed stage codes and numeric HTTP statuses reach Workers Logs.
+class PrepareFailure extends Error {
+  constructor(code, status = null) {
+    super(code);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+function prepareFetch(fetcher, stage) {
+  return async (url, options) => {
+    let response;
+    try {
+      response = await fetcher(url, options);
+    } catch (error) {
+      const timedOut = options.signal.aborted || error?.name === 'TimeoutError';
+      throw new PrepareFailure(stage + (timedOut ? '_timeout' : '_request_error'));
+    }
+    if (response.status !== 200) {
+      const status = response.status;
+      throw new PrepareFailure(stage + '_http_error',
+        Number.isInteger(status) && status >= 100 && status <= 599 ? status : null);
+    }
+    return response;
+  };
+}
+
+async function prepareSource(base, file, fetcher) {
+  try {
+    return await sourceAt(base, file, prepareFetch(fetcher, 'github_source'));
+  } catch (error) {
+    if (error instanceof PrepareFailure) throw error;
+    throw new PrepareFailure(error?.name === 'TimeoutError' || error?.name === 'AbortError'
+      ? 'github_source_timeout' : 'github_source_invalid_response');
+  }
+}
+
+async function validate(env, run, fetcher, preflightSource) {
   const response = await fetcher(env.STUDIO_CHECK_ORIGIN + '/check', {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(300_000),
     headers: { Authorization: 'Bearer ' + env.STUDIO_CHECK_SECRET, 'Content-Type': 'application/json' },
@@ -98,7 +135,7 @@ async function validate(env, run, fetcher) {
   const result = await response.json();
   if (result.base !== run.base_sha || typeof result.passed !== 'boolean') throw new Error('Invalid check result');
   if (result.passed) {
-    const source = await sourceAt(run.base_sha, path, fetcher);
+    const source = preflightSource ?? await sourceAt(run.base_sha, path, fetcher);
     if (result.digest !== await copyDigest(applyCopy(source, run.replacement))) throw new Error('Wrong checked artifact');
   }
   return result.passed;
@@ -126,11 +163,22 @@ export async function tick(env, { fetcher = fetch, now = () => new Date() } = {}
     }
     if (phase === 'prepare') {
       const context = Object.fromEntries(await Promise.all([...contextFiles, path].map(async file =>
-        [file, await sourceAt(run.base_sha, file, fetcher)])));
-      if (!await validate(env, { ...run, replacement: smokeReplacement }, fetcher)) {
+        [file, await prepareSource(run.base_sha, file, fetcher)])));
+      let passed;
+      try {
+        passed = await validate(env, { ...run, replacement: smokeReplacement },
+          prepareFetch(fetcher, 'validator'), context[path]);
+      } catch (error) {
+        if (error instanceof PrepareFailure) throw error;
+        throw new PrepareFailure(error?.name === 'TimeoutError' || error?.name === 'AbortError'
+          ? 'validator_timeout' : 'validator_invalid_response');
+      }
+      if (!passed) {
+        console.warn('studio_dispatch_prepare', 'validator_checks_failed');
         return await finish(db, run, now(), 'checks_failed');
       }
       const time = now();
+      if (run.deadline <= iso(time)) return await finish(db, run, time, 'lease_expired');
       if (iso(time).slice(0, 7) !== run.month ||
           plus(time, 2).slice(0, 7) !== run.month) return await finish(db, run, time, 'execution_failed');
       // Persist before sending; an ambiguous or interrupted model call is never repeated.
@@ -155,7 +203,11 @@ export async function tick(env, { fetcher = fetch, now = () => new Date() } = {}
       return await finish(db, run, now(), 'checks_failed');
     }
     await update(db, run, phase, "phase = 'publish', check_summary = 'Repository checks passed', lock_id = NULL, lock_until = NULL");
-  } catch {
+  } catch (error) {
+    if (phase === 'prepare') {
+      if (error instanceof PrepareFailure) console.warn('studio_dispatch_prepare', error.code, error.status);
+      else console.warn('studio_dispatch_prepare', 'unexpected_prepare_failure');
+    }
     if (phase === 'model_sent' || (run.attempts >= 5 && phase !== 'publish')) {
       await finish(db, run, now(), 'execution_failed');
     } else {

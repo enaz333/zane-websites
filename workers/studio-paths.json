@@ -6,6 +6,7 @@
   "api",
   "assets",
   "autodiscover",
+  "builder",
   "buildfest",
   "callback",
   "cdn-cgi",

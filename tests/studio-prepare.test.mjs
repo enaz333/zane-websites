@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { Buffer } from 'node:buffer';
 import { tick } from '../workers/studio-dispatch.mjs';
 
 const task = 'd8220ea5-6e14-4397-9fec-0e866f8c13d7';
@@ -17,7 +18,10 @@ const env = {
 
 test('prepare errors log fixed codes and leave the model unsent', async t => {
   const payload = 'fixture-private-payload';
-  const okSource = () => Response.json({ type: 'file', encoding: 'base64', size: 4, content: 'dGVzdA==' });
+  const source = '<h2 id="projects-title">A little of everything.</h2>';
+  const okSource = () => Response.json({
+    type: 'file', encoding: 'base64', size: Buffer.byteLength(source), content: Buffer.from(source).toString('base64'),
+  });
   for (const stage of ['github_source', 'validator']) {
     for (const [suffix, fail, status] of [
       ['request_error', () => { throw new Error(payload); }, null],
@@ -25,6 +29,12 @@ test('prepare errors log fixed codes and leave the model unsent', async t => {
       ['http_error', () => new Response(payload, { status: 403 }), 403],
       ['http_error', () => new Response(payload, { status: 201 }), 201],
       ['invalid_response', () => new Response(payload), null],
+      ['invalid_response', () => Response.json(null), null],
+      ...(stage === 'validator' ? [
+        ['invalid_response', () => Response.json({ base: 'b'.repeat(40), passed: true }), null],
+        ['invalid_response', () => Response.json({ base, passed: true, digest: '0'.repeat(64) }), null],
+      ] : []),
+      ['invalid_response', () => Response.json({ type: 'file', encoding: 'base64', size: 4, content: 'dGVzdA==!' }), null],
     ]) {
       await t.test(stage + '_' + suffix + (status ?? ''), async sub => {
         const updates = [];

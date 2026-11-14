@@ -1,5 +1,5 @@
 import {habits,completion,toggle} from './model.mjs';
-const key = 'studio-habits-' + new Date().toLocaleDateString('en-CA');
+const key = 'studio-habits-' + location.pathname.split('/')[1] + '-' + new Date().toLocaleDateString('en-CA');
 let values = [];
 try {
   const stored = JSON.parse(localStorage.getItem(key) || '[]');

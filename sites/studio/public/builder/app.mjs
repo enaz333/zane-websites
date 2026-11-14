@@ -3,6 +3,7 @@ const status = document.querySelector('#status');
 const projects = document.querySelector('#projects');
 let requestId = crypto.randomUUID();
 form.addEventListener('input', () => { requestId = crypto.randomUUID(); });
+form.elements.slug.addEventListener('input', () => { form.elements.parent.value = '0'; });
 async function refresh() {
   const response = await fetch('/api/projects');
   if (!response.ok) throw new Error('Project list unavailable');

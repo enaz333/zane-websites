@@ -43,3 +43,7 @@ node --test tests/studio-prepare.test.mjs tests/studio-dispatch.test.mjs tests/s
 ```
 
 Run the README suite as well. The HTTP tests invoke handlers directly so they can verify origin rejection, project listing, preview serving and tamper rejection in environments that prohibit socket listeners.
+
+## Follow-up sprint
+
+The provider/workspace branch adds two fixtures, request messages, specification restoration, prior-artifact checks, local Studio navigation and source-pinned patch review. The updated implementation status, browser verification, provider boundaries and remaining cloud work are recorded in [the next sprint handoff](studio-next-sprint.md).

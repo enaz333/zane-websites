@@ -39,3 +39,18 @@ class ProviderTests(unittest.TestCase):
     def test_mutable_image_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "immutable"):
             DockerRunner("node:latest")
+
+    def test_runner_has_no_network_or_writable_host_mount(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / "public").mkdir()
+            with patch("studio_engine.runner.subprocess.run") as execute:
+                DockerRunner("sha256:" + "a" * 64).validate(folder)
+            args = execute.call_args.args[0]
+            for flag in ("--network=none", "--read-only", "--cap-drop=ALL",
+                         "--security-opt=no-new-privileges", "--pids-limit=32", "--pull=never"):
+                self.assertIn(flag, args)
+            self.assertTrue(args[args.index("--mount") + 1].endswith(",readonly"))
+            self.assertEqual(execute.call_args.kwargs["timeout"], 20)

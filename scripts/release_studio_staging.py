@@ -14,7 +14,7 @@ from prepare_studio_staging import BUDGET, DATABASE, DISPATCH_CONNECTION, DISPAT
 from release_studio import NoRedirect, SHA, UUID, StudioCloudflare, record, wrangler
 
 DISPATCH = "zane-studio-dispatch-staging"
-MIGRATIONS = {"0001_tasks.sql", "0002_execution.sql", "0003_dispatch.sql"}
+MIGRATIONS = {"0001_tasks.sql", "0002_execution.sql", "0003_dispatch.sql", "0004_projects.sql"}
 DISPATCH_SECRETS = {"STUDIO_OPENAI_KEY", "STUDIO_GITHUB_PRIVATE_KEY", "STUDIO_CHECK_SECRET"}
 ACCESS = ("ACCESS_TEAM_ORIGIN", "ACCESS_AUD", "STUDIO_OWNER_EMAIL")
 RECOVERY_WEB_VERSION = "427e7aff-6a11-4ce0-a6b0-f3d89ff8f735"
@@ -64,7 +64,7 @@ def settings(env):
 def validate_plan(plan, staging, base):
     migration_dir = ROOT / "sites/studio/migrations"
     if {path.name for path in migration_dir.glob("*.sql")} != MIGRATIONS:
-        raise ValueError("Initial staging release permits only migrations 0001–0003")
+        raise ValueError("Initial staging release permits only migrations 0001–0004")
     common = {
         "compatibility_date": "2026-11-12", "workers_dev": False, "preview_urls": False,
         "d1_databases": [{"binding": "DB", "database_name": DATABASE, "database_id": staging,
@@ -306,7 +306,7 @@ def initialize(env):
                "retain staging D1 and the marker, and inspect recorded versions before any recovery.")
         migrate(plan, d1_env, staging)
         verify_marker(plan, d1_env, staging)
-        record(f"Staging migrations 0001–0003 and marker `{staging}` verified.")
+        record(f"Staging migrations 0001–0004 and marker `{staging}` verified.")
         require_unattached(workers[0])
         if any(worker.exists() for worker in workers):
             raise ValueError("Staging Workers appeared during migration")

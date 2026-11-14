@@ -18,7 +18,7 @@ Open http://127.0.0.1:8796/#projects. Use a synthetic brief. Create a project, s
 ## Protected staging proposal
 
 1. Review draft PRs in stack order. Confirm the exact staging D1 identity and marker, Access policy, active Worker and validator revisions, and disabled dispatcher configuration using read-only access.
-2. Approve a separate release to apply migration 0004 to staging D1 before uploading the web Worker. The historical staging initializer explicitly gates migrations 0001–0003. Prepare a reviewed additive migration workflow for the existing staging database before rollout.
+2. Approve a separate release to apply migration 0004 to staging D1 before uploading the web Worker. The protected staging release allowlist includes migration 0004. Prepare a reviewed additive migration workflow for the existing staging database before rollout.
 3. With the dispatcher inert, verify owner-scoped creation, requests and cancellation under Access and confirm existing tasks remain visible. Record the previous web version. Roll back the web Worker to that version if needed and preserve the additive tables.
 4. Add an isolated cloud runner, persistent job identity and private artifact storage. Bind results to the exact parent and source revision. Obtain separate approval for hosting and any paid provider test after reviewing quotas and prices. This sprint incurred zero model calls.
 5. Connect independent validation and the constrained publisher with stale-base rejection and lost-reply reconciliation. Review the resulting staging acceptance flow before authorizing any app publication.

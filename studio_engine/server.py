@@ -1,5 +1,6 @@
 """Loopback-only synthetic-data workbench and a separate immutable-preview origin."""
 import argparse
+import difflib
 import json
 import re
 import sqlite3
@@ -28,6 +29,8 @@ def handler(workspace, preview=False):
             self.send_header("Content-Type", mime)
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
             self.send_header("Content-Security-Policy",
                              "default-src 'self'; script-src 'self'; style-src 'self'; "
                              "connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
@@ -66,7 +69,7 @@ def handler(workspace, preview=False):
                     projects = [dict(row) for row in engine.db.execute("SELECT * FROM projects ORDER BY slug")]
                     for project in projects:
                         project["runs"] = [dict(row) for row in engine.db.execute(
-                            "SELECT id,state,diagnostic,created_at FROM runs WHERE slug=? ORDER BY rowid DESC",
+                            "SELECT id,state,diagnostic,created_at,parent,request,message,digest FROM runs WHERE slug=? ORDER BY rowid DESC",
                             (project["slug"],))]
                     return self.reply(200, projects)
                 finally:
@@ -88,7 +91,7 @@ def handler(workspace, preview=False):
                 body = json.loads(self.rfile.read(size))
                 engine = Engine(workspace)
                 try:
-                    result = engine.build(body["specification"], body["request_id"], body["parent"])
+                    result = engine.build(body["specification"], body["request_id"], body["parent"], message=body.get("message", ""))
                     self.reply(200, {key: result[key] for key in ("state", "diagnostic", "digest")})
                 finally:
                     engine.close()

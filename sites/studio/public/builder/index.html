@@ -1,8 +1,10 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Studio local builder</title><link rel="stylesheet" href="./style.css"></head><body><main>
-<p>Studio · local development</p><h1>Your projects</h1><p>Build a reviewed collection fixture. Requests are saved locally. Generation is deterministic.</p>
+<nav aria-label="Studio"><a href="http://127.0.0.1:8793/#edit">Edit</a> · <a href="http://127.0.0.1:8793/#new">Add New</a> · <a href="http://127.0.0.1:8793/#activity">Activity</a> · Projects (local)</nav><h1>Your projects</h1><p>Build reviewed collection or habit fixtures. Name changes update the application heading. Other instructions are saved for future AI execution.</p>
 <form id="request"><label>Project slug <input name="slug" required pattern="[a-z][a-z0-9-]{2,39}" value="collected-demo"></label>
 <label>Name <input name="name" required maxlength="100" value="Collected"></label>
 <label>Project brief <textarea name="description" required maxlength="4000">A personal collection with search, categories and favorites.</textarea></label>
+<label>Application <select name="template"><option value="collection">Collection fixture</option><option value="habits">Habit tracker fixture</option></select></label>
+<label>Requested change <textarea name="message" maxlength="4000" placeholder="Record what should change"></textarea></label>
 <input name="parent" type="hidden" value="0"><button>Build fixture</button></form><p id="status" role="status"></p>
 <section id="projects" aria-label="Saved projects"></section></main><script type="module" src="./app.mjs"></script></body></html>

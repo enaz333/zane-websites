@@ -1,4 +1,5 @@
 """Durable local application builds with an independently checked artifact boundary."""
+import html
 import hashlib
 import json
 import re
@@ -30,12 +31,20 @@ class FixtureProvider:
     identity = "deterministic-collection-1"
 
     def generate(self, specification, previous):
-        return {name: (ROOT / "studio_engine/fixtures/collection" / name).read_text()
-                for name in FILES}
+        template = specification.get("template", "collection")
+        if template not in {"collection", "habits"}:
+            raise ValueError("unsupported_template")
+        files = {name: (ROOT / "studio_engine/fixtures" / template / name).read_text()
+                 for name in FILES}
+        if "name" in specification:
+            heading = "Collected" if template == "collection" else "Daily practice"
+            files["index.html"] = files["index.html"].replace(
+                "<h1>" + heading + "</h1>", "<h1>" + html.escape(specification["name"]) + "</h1>")
+        return files
 
 
 def validate_spec(spec):
-    if not isinstance(spec, dict) or set(spec) != {"slug", "name", "description", "capabilities"}:
+    if not isinstance(spec, dict) or set(spec) - {"slug", "name", "description", "capabilities", "template"} or not {"slug", "name", "description", "capabilities"} <= set(spec):
         raise ValueError("invalid_specification")
     if not isinstance(spec["slug"], str) or not re.fullmatch(r"[a-z][a-z0-9-]{2,39}", spec["slug"]):
         raise ValueError("invalid_slug")
@@ -45,6 +54,8 @@ def validate_spec(spec):
     for field, limit in (("name", 100), ("description", 4000)):
         if not isinstance(spec[field], str) or not 1 <= len(spec[field].strip()) <= limit:
             raise ValueError("invalid_specification")
+    if spec.get("template", "collection") not in {"collection", "habits"}:
+        raise ValueError("unsupported_template")
     caps = spec["capabilities"]
     if not isinstance(caps, list) or not caps or any(not isinstance(c, str) or c not in CAPABILITIES for c in caps):
         raise ValueError("invalid_capabilities")
@@ -52,13 +63,13 @@ def validate_spec(spec):
         raise ValueError("capability_requires_adapter_and_approval")
 
 
-def validate_files(files):
+def validate_files(files, specification=None):
     if not isinstance(files, dict) or set(files) != FILES:
         raise ValueError("invalid_artifact_paths")
     if any(not isinstance(value, str) or len(value.encode()) > 100_000 for value in files.values()):
         raise ValueError("artifact_size_limit")
     # This local executor only accepts the reviewed fixture. Arbitrary code requires a sandbox adapter.
-    approved = FixtureProvider().generate({}, {})
+    approved = FixtureProvider().generate(specification or {}, {})
     if files != approved:
         raise ValueError("unreviewed_executable_artifact")
 
@@ -85,6 +96,11 @@ class Engine:
             run_id TEXT NOT NULL, phase TEXT NOT NULL, occurred_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
         """)
 
+        columns = {row["name"] for row in self.db.execute("PRAGMA table_info(runs)")}
+        if "message" not in columns:
+            self.db.execute("ALTER TABLE runs ADD COLUMN message TEXT NOT NULL DEFAULT ''")
+        self.db.commit()
+
     def close(self):
         self.db.close()
 
@@ -92,8 +108,10 @@ class Engine:
         with self.db:
             self.db.execute("INSERT INTO events(run_id,phase) VALUES (?,?)", (run_id, phase))
 
-    def build(self, spec, request_id, parent=0, provider=None):
+    def build(self, spec, request_id, parent=0, provider=None, message=""):
         validate_spec(spec)
+        if not isinstance(message, str) or len(message) > 4000:
+            raise ValueError("invalid_message")
         if not re.fullmatch(r"[a-zA-Z0-9-]{1,80}", request_id):
             raise ValueError("invalid_request_id")
         if type(parent) is not int or parent < 0:
@@ -104,15 +122,15 @@ class Engine:
             self.db.execute("BEGIN IMMEDIATE")
             existing = self.db.execute("SELECT * FROM runs WHERE id=?", (request_id,)).fetchone()
             if existing:
-                if existing["request"] != payload or existing["parent"] != parent or existing["provider"] != provider.identity:
+                if existing["request"] != payload or existing["parent"] != parent or existing["provider"] != provider.identity or existing["message"] != message:
                     raise ValueError("idempotency_conflict")
                 return dict(existing)
             self.db.execute("INSERT OR IGNORE INTO projects(slug,specification) VALUES (?,?)", (spec["slug"], payload))
             project = self.db.execute("SELECT * FROM projects WHERE slug=?", (spec["slug"],)).fetchone()
             if project["version"] != parent:
                 raise ValueError("stale_project_version")
-            self.db.execute("INSERT INTO runs(id,slug,parent,state,provider,request) VALUES (?,?,?,'running',?,?)",
-                            (request_id, spec["slug"], parent, provider.identity, payload))
+            self.db.execute("INSERT INTO runs(id,slug,parent,state,provider,request,message) VALUES (?,?,?,'running',?,?,?)",
+                            (request_id, spec["slug"], parent, provider.identity, payload, message))
         try:
             self.event(request_id, "generating")
             previous = {}
@@ -125,7 +143,7 @@ class Engine:
                 if not recorded or digest(previous) != recorded["digest"]:
                     raise ValueError("prior_artifact_changed")
             files = provider.generate(spec, previous)
-            validate_files(files)
+            validate_files(files, spec)
             self.event(request_id, "building")
             with tempfile.TemporaryDirectory(dir=self.directory) as temporary:
                 folder = Path(temporary)
@@ -137,7 +155,7 @@ class Engine:
                     subprocess.run([NODE, "--check", str(public / name)], check=True,
                                    timeout=10, capture_output=True, env={"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"})
                 self.event(request_id, "testing")
-                shutil.copy(ROOT / "studio_engine/fixtures/collection/model.test.mjs", folder / "model.test.mjs")
+                shutil.copy(ROOT / "studio_engine/fixtures" / spec.get("template", "collection") / "model.test.mjs", folder / "model.test.mjs")
                 subprocess.run([NODE, "--test", str(folder / "model.test.mjs")], check=True,
                                timeout=15, capture_output=True, env={"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"})
                 artifact = digest(files)

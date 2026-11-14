@@ -106,3 +106,10 @@ class WorkspaceHttpTests(unittest.TestCase):
         (Path(self.temp.name) / "collected-demo/1/public/app.mjs").write_text("tampered")
         self.assertEqual(self.request(path, preview=True)[0], 409)
         self.assertEqual(self.request("/../studio.sqlite", preview=True)[0], 404)
+
+class PriorArtifactTests(AppEngineTests):
+    def test_tampered_prior_cannot_seed_iteration(self):
+        self.engine.build(self.spec, "original")
+        (Path(self.temp.name) / self.spec["slug"] / "1/public/app.mjs").write_text("tampered")
+        result = self.engine.build(self.spec, "iteration", 1)
+        self.assertEqual(result["diagnostic"], "prior_artifact_changed")

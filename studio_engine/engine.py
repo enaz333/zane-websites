@@ -15,7 +15,8 @@ CAPABILITIES = {"interactive": "review", "worker-api": "approval", "database": "
                 "payments": "approval", "scheduled-work": "approval", "realtime": "approval",
                 "mapping": "approval", "media": "approval", "ai": "approval", "webxr": "review"}
 FILES = {"index.html", "style.css", "app.mjs", "model.mjs"}
-VERSION = "studio-local-1"
+VERSION = "studio-local-2"
+NODE = shutil.which("node")
 
 
 class Provider(Protocol):
@@ -118,6 +119,11 @@ class Engine:
             if parent:
                 prior = self.directory / spec["slug"] / str(parent)
                 previous = {name: (prior / "public" / name).read_text() for name in FILES}
+                recorded = self.db.execute(
+                    "SELECT digest FROM runs WHERE slug=? AND parent=? AND state='review_ready'",
+                    (spec["slug"], parent - 1)).fetchone()
+                if not recorded or digest(previous) != recorded["digest"]:
+                    raise ValueError("prior_artifact_changed")
             files = provider.generate(spec, previous)
             validate_files(files)
             self.event(request_id, "building")
@@ -128,11 +134,11 @@ class Engine:
                 for name, content in files.items():
                     (public / name).write_text(content)
                 for name in ("app.mjs", "model.mjs"):
-                    subprocess.run(["node", "--check", str(public / name)], check=True,
+                    subprocess.run([NODE, "--check", str(public / name)], check=True,
                                    timeout=10, capture_output=True, env={"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"})
                 self.event(request_id, "testing")
                 shutil.copy(ROOT / "studio_engine/fixtures/collection/model.test.mjs", folder / "model.test.mjs")
-                subprocess.run(["node", "--test", str(folder / "model.test.mjs")], check=True,
+                subprocess.run([NODE, "--test", str(folder / "model.test.mjs")], check=True,
                                timeout=15, capture_output=True, env={"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"})
                 artifact = digest(files)
                 manifest = dict(run_id=request_id, specification=spec, parent=parent, version=parent + 1,
@@ -154,7 +160,7 @@ class Engine:
         except Exception as error:
             code = str(error) if isinstance(error, ValueError) else "build_or_test_failed"
             if code not in {"invalid_artifact_paths", "artifact_size_limit", "unreviewed_executable_artifact",
-                            "artifact_requires_reconciliation"}:
+                            "artifact_requires_reconciliation", "prior_artifact_changed"}:
                 code = "build_or_test_failed"
             with self.db:
                 self.db.execute("UPDATE runs SET state='failed',diagnostic=? WHERE id=?", (code, request_id))

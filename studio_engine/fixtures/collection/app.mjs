@@ -4,9 +4,10 @@ const category = document.querySelector('#category');
 const only = document.querySelector('#only');
 const list = document.querySelector('#items');
 const status = document.querySelector('#status');
+const storageKey = 'collection-favorites-' + location.pathname.split('/')[1];
 let favorites = [];
 try {
-  const saved = JSON.parse(localStorage.getItem('collection-favorites') || '[]');
+  const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
   if (Array.isArray(saved)) favorites = saved.filter(id => items.some(item => item.id === id));
 } catch {}
 function render() {
@@ -27,7 +28,7 @@ function render() {
     button.onclick = () => {
       favorites = toggle(favorites, item.id);
       render();
-      try { localStorage.setItem('collection-favorites', JSON.stringify(favorites)); }
+      try { localStorage.setItem(storageKey, JSON.stringify(favorites)); }
       catch { status.textContent = 'Storage unavailable. Favorites last for this visit.'; }
     };
     card.append(label, heading, description, button);

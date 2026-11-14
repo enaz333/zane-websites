@@ -197,3 +197,12 @@ for (const form of forms) {
 
 selectTab();
 loadProjects();
+
+// Only the loopback entry point advertises the local builder.
+api('/api/builder').then(({ local_url }) => {
+  if (local_url !== 'http://127.0.0.1:8794/' || location.origin !== 'http://127.0.0.1:8793') return;
+  const link = document.createElement('a');
+  link.href = local_url;
+  link.textContent = 'Projects (local)';
+  document.querySelector('.tabs').append(link);
+}).catch(() => {});

@@ -3,10 +3,12 @@ import argparse
 import json
 import re
 import sqlite3
+import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from .engine import Engine, FILES, ROOT, digest
+from .export import prepare
 
 UI = ROOT / "sites/studio/public/builder"
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -28,6 +30,8 @@ def handler(workspace, preview=False):
             self.send_header("Content-Type", mime)
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
             self.send_header("Content-Security-Policy",
                              "default-src 'self'; script-src 'self'; style-src 'self'; "
                              "connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
@@ -66,7 +70,7 @@ def handler(workspace, preview=False):
                     projects = [dict(row) for row in engine.db.execute("SELECT * FROM projects ORDER BY slug")]
                     for project in projects:
                         project["runs"] = [dict(row) for row in engine.db.execute(
-                            "SELECT id,state,diagnostic,created_at FROM runs WHERE slug=? ORDER BY rowid DESC",
+                            "SELECT id,state,diagnostic,created_at,parent,request,message,digest FROM runs WHERE slug=? ORDER BY rowid DESC",
                             (project["slug"],))]
                     return self.reply(200, projects)
                 finally:
@@ -79,7 +83,7 @@ def handler(workspace, preview=False):
         def do_POST(self):
             if preview or not self.host_valid() or self.headers.get("Origin") != origin:
                 return self.reply(403, {})
-            if self.path != "/api/build" or self.headers.get("Content-Type") != "application/json":
+            if self.path not in {"/api/build", "/api/export"} or self.headers.get("Content-Type") != "application/json":
                 return self.reply(400, {})
             try:
                 size = int(self.headers.get("Content-Length", "0"))
@@ -88,11 +92,15 @@ def handler(workspace, preview=False):
                 body = json.loads(self.rfile.read(size))
                 engine = Engine(workspace)
                 try:
-                    result = engine.build(body["specification"], body["request_id"], body["parent"])
-                    self.reply(200, {key: result[key] for key in ("state", "diagnostic", "digest")})
+                    if self.path == "/api/export":
+                        base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, timeout=10).decode().strip()
+                        self.reply(200, prepare(engine, body["slug"], body["version"], base))
+                    else:
+                        result = engine.build(body["specification"], body["request_id"], body["parent"], message=body.get("message", ""))
+                        self.reply(200, {key: result[key] for key in ("state", "diagnostic", "digest")})
                 finally:
                     engine.close()
-            except (ValueError, KeyError, TypeError, sqlite3.IntegrityError):
+            except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError, sqlite3.IntegrityError):
                 self.reply(400, {"error": "invalid_or_conflicting_request"})
     return Handler
 

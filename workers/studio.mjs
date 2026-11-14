@@ -136,7 +136,7 @@ async function submit(request, db, owner, queueEdits) {
   return json({ task: present(record) }, insert.meta.changes ? 201 : 200);
 }
 
-export function createStudio(authenticate, { queueEdits = false } = {}) {
+export function createStudio(authenticate, { queueEdits = false, localBuilder = false } = {}) {
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
@@ -154,6 +154,10 @@ export function createStudio(authenticate, { queueEdits = false } = {}) {
         const secure = new Headers(asset.headers);
         for (const [key, value] of Object.entries(headers)) secure.set(key, value);
         return new Response(asset.body, { status: asset.status, headers: secure });
+      }
+      if (path === '/api/builder' && method === 'GET') {
+        return json({ local_url: localBuilder && url.origin === 'http://127.0.0.1:8793'
+          ? 'http://127.0.0.1:8794/' : null });
       }
       if (path === '/api/projects' && method === 'GET') return json({ projects: targets });
       const cancel = path.match(/^\/api\/tasks\/([^/]+)\/cancel$/);

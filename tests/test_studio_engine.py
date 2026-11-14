@@ -106,3 +106,28 @@ class WorkspaceHttpTests(unittest.TestCase):
         (Path(self.temp.name) / "collected-demo/1/public/app.mjs").write_text("tampered")
         self.assertEqual(self.request(path, preview=True)[0], 409)
         self.assertEqual(self.request("/../studio.sqlite", preview=True)[0], 404)
+
+class PriorArtifactTests(AppEngineTests):
+    def test_tampered_prior_cannot_seed_iteration(self):
+        self.engine.build(self.spec, "original")
+        (Path(self.temp.name) / self.spec["slug"] / "1/public/app.mjs").write_text("tampered")
+        result = self.engine.build(self.spec, "iteration", 1)
+        self.assertEqual(result["diagnostic"], "prior_artifact_changed")
+
+class ContrastingFixtureTests(unittest.TestCase):
+    def test_habits_and_renamed_collection_preserve_history(self):
+        with tempfile.TemporaryDirectory() as folder:
+            engine = Engine(folder)
+            self.addCleanup(engine.close)
+            spec = json.loads((ROOT / "studio_engine/fixtures/spec.json").read_text())
+            first = engine.build(spec, "first")
+            second = engine.build(spec | {"name": "Objects worth keeping"}, "second", 1,
+                                  message="Rename heading")
+            self.assertNotEqual(first["digest"], second["digest"])
+            self.assertIn("Collected", (Path(folder) / spec["slug"] / "1/public/index.html").read_text())
+            habits = spec | {"slug": "daily-habits", "template": "habits", "name": "Daily practice"}
+            result = engine.build(habits, "habits")
+            self.assertEqual(result["state"], "review_ready")
+            self.assertNotEqual(result["digest"], first["digest"])
+            self.assertEqual(engine.db.execute("SELECT message FROM runs WHERE id='second'").fetchone()[0],
+                             "Rename heading")

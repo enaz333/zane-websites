@@ -7,6 +7,7 @@
   <title>Zane Studio</title>
   <link rel="stylesheet" href="/studio.css">
   <script type="module" src="/studio.js"></script>
+  <script type="module" src="/studio-projects.js"></script>
 </head>
 <body>
   <header class="masthead"><div class="wrap mast-inner">
@@ -22,6 +23,7 @@
     <nav aria-label="Studio" class="tabs">
       <a href="#edit" aria-current="page">Edit</a>
       <a href="#new">Add New</a>
+      <a href="#projects">Projects</a>
       <a href="#activity">Activity</a>
     </nav>
     <p id="notice" class="notice" role="status"></p>
@@ -50,6 +52,18 @@
           <label class="priority"><input type="checkbox" name="asap"><span>As soon as possible<small>Unchecked requests prefer economy when execution is available.</small></span></label>
           <button type="submit" disabled>Save request <span aria-hidden="true">↗</span></button>
         </form>
+      </section>
+      <section id="projects" class="card" hidden aria-labelledby="projects-heading">
+        <h2 id="projects-heading">Projects</h2>
+        <div id="project-list"></div>
+        <form id="project-create">
+          <label>Project name<input name="name" maxlength="120" required></label>
+          <label>Proposed URL slug<input name="slug" maxlength="40" required></label>
+          <label>Application brief<textarea name="brief" maxlength="4000" required></textarea></label>
+          <button>Create project</button>
+        </form>
+        <p id="project-status" role="status"></p>
+        <div id="project-detail"></div>
       </section>
       <section id="activity" class="card" aria-labelledby="activity-heading" hidden>
         <div class="card-head"><h2 id="activity-heading">Request history</h2><button id="refresh" class="quiet" type="button">Refresh</button></div>

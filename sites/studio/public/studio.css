@@ -61,3 +61,7 @@ li p { margin-block: .35rem; white-space: pre-wrap; }
 li h3 { margin: 0; font-size: 1rem; }
 li button { margin-top: .5rem; }
 @media (min-width: 48rem) { .workspace { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
+
+#project-list button, #project-detail section button { margin: .25rem .35rem .25rem 0; }
+#project-detail section { border-top: 1px solid currentColor; margin-top: 1rem; padding-top: .5rem; }
+#project-detail pre, #project-detail p { white-space: pre-wrap; overflow-wrap: anywhere; }

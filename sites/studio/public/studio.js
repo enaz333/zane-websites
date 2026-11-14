@@ -1,6 +1,6 @@
 const $ = selector => document.querySelector(selector);
 const tabs = [...document.querySelectorAll('.tabs a')];
-const forms = [...document.forms];
+const forms = [...document.querySelectorAll("form[data-kind]")];
 const history = $('#history');
 const notice = $('#notice');
 const empty = $('#empty');

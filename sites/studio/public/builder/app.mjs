@@ -60,7 +60,28 @@ async function refresh() {
           requestId = crypto.randomUUID();
           form.elements.message.focus();
         };
-        card.append(link, restore);
+        const review = document.createElement('button');
+        review.textContent = 'Prepare version ' + (run.parent + 1) + ' patch';
+        review.onclick = async () => {
+          review.disabled = true;
+          try {
+            const response = await fetch('/api/export', {method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({slug: spec.slug, version: run.parent + 1})});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Export failed');
+            const details = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = 'Review disabled project patch against ' + result.source_sha.slice(0, 7);
+            const patch = document.createElement('pre');
+            patch.textContent = result.patch;
+            details.append(summary, patch);
+            card.append(details);
+            status.textContent = 'Patch prepared · SHA-256 ' + result.patch_sha256;
+          } catch(error) { status.textContent = error.message; }
+          finally { review.disabled = false; }
+        };
+        card.append(link, restore, review);
       }
     }
     projects.append(card);

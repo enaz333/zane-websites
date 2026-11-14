@@ -10,6 +10,7 @@ import subprocess
 import tarfile
 import tempfile
 from scripts.projects import scaffold, load
+from scripts.studio_paths import inventory
 from .engine import Engine, FILES, ROOT, digest, validate_files
 
 
@@ -49,9 +50,10 @@ def prepare(engine, slug, version, base, repository=ROOT):
             path = root / prefix / relative
             candidates[prefix + relative] = path.read_text()
         candidates["projects.json"] = (root / "projects.json").read_text()
-        # The route inventory reserves the disabled project's slug.
-        inventory = json.loads((root / "workers/studio-paths.json").read_text())
-        candidates["workers/studio-paths.json"] = json.dumps(sorted(set(inventory) | {slug}), indent=2) + "\n"
+        for path, content in candidates.items():
+            (root / path).write_text(content)
+        load(root)
+        candidates["workers/studio-paths.json"] = json.dumps(inventory(root), indent=2) + "\n"
         for path, content in candidates.items():
             result = subprocess.run(["git", "show", base + ":" + path], cwd=repository,
                                     capture_output=True, timeout=10)

@@ -2,19 +2,22 @@
 import argparse
 import json
 
-from projects import ROOT, RESERVED_PATHS, load
+if __package__:
+    from .projects import ROOT, RESERVED_PATHS, load
+else:
+    from projects import ROOT, RESERVED_PATHS, load
 
 OUTPUT = ROOT / "workers/studio-paths.json"
 
 
-def inventory():
-    projects = load()
+def inventory(root=ROOT):
+    projects = load(root)
     paths = set(RESERVED_PATHS) | set(projects)
     paths.update(entry["subdomain"] for entry in projects.values() if entry["subdomain"])
     for slug, entry in projects.items():
         paths.add(entry["short_path"].split("/")[1].lower())
         # The Club tree also contains the historical aliases.
-        for item in (ROOT / "sites" / slug / "public").iterdir():
+        for item in (root / "sites" / slug / "public").iterdir():
             if not item.name.startswith((".", "_")):
                 paths.add(item.name.lower())
     return sorted(paths - {""})

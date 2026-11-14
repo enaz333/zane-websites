@@ -135,7 +135,7 @@ class Engine:
                 subprocess.run(["node", "--test", str(folder / "model.test.mjs")], check=True,
                                timeout=15, capture_output=True, env={"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"})
                 artifact = digest(files)
-                manifest = dict(specification=spec, parent=parent, version=parent + 1,
+                manifest = dict(run_id=request_id, specification=spec, parent=parent, version=parent + 1,
                                 artifact=artifact, provider=provider.identity, validator=VERSION,
                                 publisher="review-only", enabled=False, estimated_cost_micros=0,
                                 actual_provider_charge=None, proposed_url="/" + spec["slug"])

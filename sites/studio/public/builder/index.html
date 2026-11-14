@@ -1,8 +1,8 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Studio local builder</title><link rel="stylesheet" href="/style.css"></head><body><main>
+<title>Studio local builder</title><link rel="stylesheet" href="./style.css"></head><body><main>
 <p>Studio · local development</p><h1>Your projects</h1><p>Build a reviewed collection fixture. Requests are saved locally. Generation is deterministic.</p>
 <form id="request"><label>Project slug <input name="slug" required pattern="[a-z][a-z0-9-]{2,39}" value="collected-demo"></label>
 <label>Name <input name="name" required maxlength="100" value="Collected"></label>
 <label>Project brief <textarea name="description" required maxlength="4000">A personal collection with search, categories and favorites.</textarea></label>
 <input name="parent" type="hidden" value="0"><button>Build fixture</button></form><p id="status" role="status"></p>
-<section id="projects" aria-label="Saved projects"></section></main><script type="module" src="/app.mjs"></script></body></html>
+<section id="projects" aria-label="Saved projects"></section></main><script type="module" src="./app.mjs"></script></body></html>

@@ -65,3 +65,44 @@ class AppEngineTests(unittest.TestCase):
             result = self.engine.build(self.spec, "untrusted", provider=BadProvider())
         execute.assert_not_called()
         self.assertEqual(result["diagnostic"], "unreviewed_executable_artifact")
+
+class WorkspaceHttpTests(unittest.TestCase):
+    def setUp(self):
+        import io
+        from studio_engine.server import handler
+        self.io = io
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.handler = handler
+
+    def request(self, path, *, preview=False, method="GET", body=None, origin=None, host=None):
+        port = 8795 if preview else 8794
+        instance = object.__new__(self.handler(self.temp.name, preview))
+        instance.path = path
+        encoded = json.dumps(body).encode() if body is not None else b""
+        instance.headers = {"Host": host or f"127.0.0.1:{port}",
+                            "Content-Type": "application/json", "Content-Length": str(len(encoded)),
+                            "Origin": origin}
+        instance.rfile = self.io.BytesIO(encoded)
+        responses = []
+        instance.reply = lambda *args: responses.append(args)
+        getattr(instance, "do_" + method)()
+        return responses[0]
+
+    def test_origin_and_host_checks(self):
+        self.assertEqual(self.request("/api/projects", host="evil.example")[0], 403)
+        self.assertEqual(self.request("/api/build", method="POST", body={}, origin="https://evil.example")[0], 403)
+        self.assertEqual(self.request("/api/build", preview=True, method="POST", body={})[0], 403)
+
+    def test_build_list_preview_and_tamper(self):
+        spec = json.loads((ROOT / "studio_engine/fixtures/spec.json").read_text())
+        result = self.request("/api/build", method="POST", origin="http://127.0.0.1:8794",
+                              body={"specification": spec, "request_id": "http-one", "parent": 0})
+        self.assertEqual(result[1]["state"], "review_ready")
+        projects = self.request("/api/projects")[1]
+        self.assertEqual(projects[0]["version"], 1)
+        path = "/collected-demo/1/index.html"
+        self.assertEqual(self.request(path, preview=True)[0], 200)
+        (Path(self.temp.name) / "collected-demo/1/public/app.mjs").write_text("tampered")
+        self.assertEqual(self.request(path, preview=True)[0], 409)
+        self.assertEqual(self.request("/../studio.sqlite", preview=True)[0], 404)

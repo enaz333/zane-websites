@@ -26,9 +26,9 @@ function render() {
     button.setAttribute('aria-pressed', String(favorites.includes(item.id)));
     button.onclick = () => {
       favorites = toggle(favorites, item.id);
+      render();
       try { localStorage.setItem('collection-favorites', JSON.stringify(favorites)); }
       catch { status.textContent = 'Storage unavailable. Favorites last for this visit.'; }
-      render();
     };
     card.append(label, heading, description, button);
     list.append(card);

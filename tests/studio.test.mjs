@@ -34,7 +34,7 @@ let mf, db;
 before(async () => {
   mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ modules: true, script: 'export default { fetch() {} }', d1Databases: ['DB'] }] }));
   db = await mf.getD1Database('DB');
-  for (const name of ['0001_tasks.sql', '0002_execution.sql', '0003_dispatch.sql']) {
+  for (const name of ['0001_tasks.sql', '0002_execution.sql', '0003_dispatch.sql', '0004_projects.sql']) {
     const migration = await readFile(new URL(`../sites/studio/migrations/${name}`, import.meta.url), 'utf8');
     await db.batch(migration.trim().split(/;\s*(?=CREATE )/).map(sql => db.prepare(sql)));
   }
@@ -326,4 +326,49 @@ test('staging verifier accepts only its configured staging host and Access audie
   assert.equal(await stagingVerifier(new Request(stagingOrigin, header(good)), env), null);
   assert.equal(await stagingVerifier(new Request(origin, header(stagingToken)), env), null);
   assert.equal(await verify(new Request(stagingOrigin, header(stagingToken)), env), null);
+});
+
+test('projects fence owners, keep immutable versions, and resolve local fixture requests once', async () => {
+  const path = '/api/workspace-projects';
+  const local = createStudio(createAccessVerifier(async () => Response.json({keys:[jwk]}), undefined, "http://127.0.0.1:8793"), {localBuilder: true});
+  const call = (route, options = {}) => {
+    const remote = request(route, options);
+    const loopback = 'http://127.0.0.1:8793';
+    const headers = new Headers(remote.headers);
+    headers.set('Origin', options.foreign ? 'https://external.example' : loopback);
+    return local.fetch(new Request(loopback + route, {
+      method: remote.method, headers, body: options.body && JSON.stringify(options.body),
+    }), { ...config, STUDIO_ORIGIN: loopback, DB: db });
+  };
+  const key = crypto.randomUUID();
+  const body = {name:'Rug Explorer', slug:'rug-explorer-fixture', brief:'Catalog rugs'};
+  assert.equal((await call(path,{body,auth:''})).status,403);
+  assert.equal((await call(path,{body,foreign:true})).status,403);
+  assert.equal((await call(path,{body,key})).status,201);
+  assert.equal((await call(path,{body,key})).status,200);
+  assert.equal((await call(path,{body:{...body,name:'Different'},key})).status,409);
+  const project = path + '/' + key;
+  const other = await token({sub:'another-owner'});
+  assert.equal((await call(project,{auth:other})).status,404);
+  assert.equal((await call(path + '/invalid')).status,404);
+  assert.deepEqual((await (await call(path,{auth:other})).json()).projects,[]);
+  const first = crypto.randomUUID();
+  const requests = project + '/requests';
+  assert.equal((await call(requests,{key:first,body:{message:'Create',brief:'Catalog rugs'}})).status,201);
+  assert.equal((await call(requests,{body:{message:'Parallel',brief:'Other'}})).status,409);
+  const build = requests + '/' + first + '/build';
+  assert.equal((await api(build,{body:{}})).status,409);
+  const version = await (await call(build,{body:{}})).json();
+  assert.match(version.request.digest,/^[a-f0-9]{64}$/);
+  assert.equal((await call(build,{body:{}})).status,200);
+  assert.equal((await call(requests,{body:{message:'Stale',brief:'Other'}})).status,409);
+  const second = crypto.randomUUID();
+  assert.equal((await call(requests,{key:second,body:{parent:first,message:'Expand',brief:'Catalog textiles'}})).status,201);
+  assert.equal((await call(requests + '/' + second + '/build',{body:{}})).status,200);
+  const third = crypto.randomUUID();
+  assert.equal((await call(requests,{key:third,body:{parent:second,restore:first,message:'Restore',brief:'Ignored'}})).status,201);
+  assert.equal((await call(requests + '/' + third + '/build',{body:{}})).status,200);
+  const result = await (await call(project)).json();
+  assert.equal(result.project.current_version,third);
+  assert.deepEqual(result.requests.map(run=>run.brief),['Catalog rugs','Catalog textiles','Catalog rugs']);
 });

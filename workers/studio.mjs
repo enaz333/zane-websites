@@ -1,3 +1,4 @@
+import { projectApi } from './studio-projects.mjs';
 import projects from '../projects.json' with { type: 'json' };
 import { eligible } from './studio-copy.mjs';
 import paths from './studio-paths.json' with { type: 'json' };
@@ -13,7 +14,7 @@ const taskView = `SELECT ${fields}, COALESCE(e.state, t.status) AS status,
   CASE WHEN d.phase IN ('prepare', 'model_sent', 'check', 'publish') THEN d.phase END AS execution_phase, t.request_hash
   FROM tasks t LEFT JOIN task_executions e ON e.task_id = t.id
   LEFT JOIN execution_dispatch d ON d.task_id = t.id`;
-const allowedAssets = new Set(['/', '/index.html', '/studio.css', '/studio.js']);
+const allowedAssets = new Set(['/', '/index.html', '/studio.css', '/studio.js', '/studio-projects.js']);
 const headers = {
   'Cache-Control': 'private, no-store',
   'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
@@ -77,7 +78,7 @@ function normalize(input) {
   return { kind, project, title, page: null, slug, description, asap };
 }
 
-async function readTask(request) {
+async function readJson(request) {
   if (request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/json') {
     throw new InputError('Send JSON.', 415);
   }
@@ -99,7 +100,7 @@ async function readTask(request) {
       }
       body += decoder.decode(value, { stream: true });
     }
-    return normalize(JSON.parse(body + decoder.decode()));
+    return JSON.parse(body + decoder.decode());
   } catch (err) {
     if (err instanceof InputError) throw err;
     throw new InputError('Send valid JSON.');
@@ -109,7 +110,7 @@ async function readTask(request) {
 async function submit(request, db, owner, queueEdits) {
   const key = request.headers.get('Idempotency-Key');
   if (!uuid.test(key ?? '')) throw new InputError('A valid request key is required.');
-  const task = await readTask(request);
+  const task = normalize(await readJson(request));
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(task)));
   const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
   const now = new Date().toISOString();
@@ -160,6 +161,16 @@ export function createStudio(authenticate, { queueEdits = false, localBuilder = 
           ? 'http://127.0.0.1:8794/' : null });
       }
       if (path === '/api/projects' && method === 'GET') return json({ projects: targets });
+      if (path === '/api/workspace-projects' || path.startsWith('/api/workspace-projects/')) {
+        if (!env.DB) return error('Project storage is unavailable.', 503);
+        try {
+          return await projectApi({ request, db: env.DB.withSession('first-primary'), owner, path,
+            fixture: localBuilder && url.origin === 'http://127.0.0.1:' + (env.STUDIO_LOCAL_PORT || '8793'), readJson, json, error });
+        } catch (err) {
+          if (err instanceof InputError) return error(err.message, err.status);
+          return error('Project storage is unavailable. Try again.', 503);
+        }
+      }
       const cancel = path.match(/^\/api\/tasks\/([^/]+)\/cancel$/);
       if (path !== '/api/tasks' && !(cancel && uuid.test(cancel[1]))) return error('Not found.', 404);
       if (!env.DB) return error('Task storage is unavailable.', 503);
